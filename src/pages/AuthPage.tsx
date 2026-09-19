@@ -1,21 +1,37 @@
-import React, { useState } from 'react';
-import { Shield, Lock, Mail, User as UserIcon, Award, Building, ArrowRight } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Shield, Lock, Mail, User as UserIcon, Award, Building, ArrowRight, ShieldCheck, UserCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.tsx';
 import { UserRole } from '../types/index.ts';
 
 export const AuthPage: React.FC = () => {
   const { login, register, error, clearError } = useAuth();
   const [isRegisterMode, setIsRegisterMode] = useState(false);
+  const [regStatus, setRegStatus] = useState<{ userCount: number; hasAdmin: boolean; nextRoleAssigned: string } | null>(null);
 
   // Form state
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
-  const [role, setRole] = useState<UserRole>('OPERATOR');
   const [badgeNumber, setBadgeNumber] = useState('');
   const [department, setDepartment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+
+  const checkRegStatus = async () => {
+    try {
+      const res = await fetch('/api/auth/registration-status');
+      if (res.ok) {
+        const data = await res.json();
+        setRegStatus(data);
+      }
+    } catch (e) {
+      // Non-blocking fallback
+    }
+  };
+
+  useEffect(() => {
+    checkRegStatus();
+  }, [isRegisterMode]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,7 +50,6 @@ export const AuthPage: React.FC = () => {
           email: email.trim(),
           password,
           name: name.trim(),
-          role,
           badgeNumber: badgeNumber.trim(),
           department: department.trim()
         });
@@ -48,12 +63,11 @@ export const AuthPage: React.FC = () => {
     }
   };
 
-  const handleQuickDemoFill = (demoRole: UserRole, demoEmail: string, demoName: string) => {
+  const handleQuickDemoFill = (demoEmail: string, demoName: string) => {
     setIsRegisterMode(true);
     setEmail(demoEmail);
     setPassword('EmergencyPass2026!');
     setName(demoName);
-    setRole(demoRole);
     setBadgeNumber('SG-001');
     setDepartment('Emergency Operations Center');
   };
@@ -140,20 +154,30 @@ export const AuthPage: React.FC = () => {
 
                 <div>
                   <label className="block text-xs font-mono uppercase text-slate-300 mb-1">
-                    System Role *
+                    Assigned Role
                   </label>
-                  <div className="relative">
-                    <Award className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
-                    <select
-                      value={role}
-                      onChange={e => setRole(e.target.value as UserRole)}
-                      className="w-full pl-9 pr-3 py-2 bg-slate-950 border border-slate-800 rounded text-sm text-slate-100 focus:outline-hidden focus:border-emerald-500"
-                    >
-                      <option value="OPERATOR">OPERATOR — Field and station logs</option>
-                      <option value="DISPATCHER">DISPATCHER — Tactical CAD & unit routing</option>
-                      <option value="RESPONDER">RESPONDER — Field rescue unit personnel</option>
-                      <option value="ADMIN">ADMIN — Incident Commander & system setup</option>
-                    </select>
+                  <div className="p-3 bg-slate-950 border border-slate-800 rounded flex items-start gap-2.5">
+                    {regStatus && !regStatus.hasAdmin ? (
+                      <>
+                        <ShieldCheck className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
+                        <div className="text-xs">
+                          <span className="font-semibold text-purple-300 font-mono">ADMIN (Incident Commander)</span>
+                          <p className="text-[11px] text-slate-400 mt-0.5">
+                            Initial bootstrap: First registered user is automatically provisioned with root Administrator privileges.
+                          </p>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <UserCheck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                        <div className="text-xs">
+                          <span className="font-semibold text-emerald-400 font-mono">OPERATOR (Standard Access)</span>
+                          <p className="text-[11px] text-slate-400 mt-0.5">
+                            Standard field operator. Role elevations (Dispatcher, Responder, Admin) are managed in Settings by an Administrator.
+                          </p>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               </>
@@ -248,31 +272,31 @@ export const AuthPage: React.FC = () => {
           {!isRegisterMode && (
             <div className="mt-6 pt-5 border-t border-slate-800/80">
               <div className="text-[11px] font-mono uppercase text-slate-400 mb-2.5 text-center">
-                First-time setup / Quick Test Account
+                Quick Test Account Prefill
               </div>
               <p className="text-[11px] text-slate-500 mb-3 text-center">
-                Need to create your first incident commander account? Click below to prefill:
+                Need to create or sign into an initial account? Click below to prefill:
               </p>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={() =>
-                    handleQuickDemoFill('ADMIN', 'commander@sentinelgrid.local', 'Incident Commander')
+                    handleQuickDemoFill('commander@sentinelgrid.local', 'Incident Commander')
                   }
                   className="px-2.5 py-1.5 bg-slate-800/90 hover:bg-slate-700/80 border border-slate-700 rounded text-[11px] text-slate-300 text-left font-mono cursor-pointer"
                 >
-                  <div className="font-semibold text-purple-300">ADMIN Role</div>
+                  <div className="font-semibold text-purple-300">Commander Account</div>
                   <div className="text-[10px] text-slate-400">commander@sentinelgrid.local</div>
                 </button>
                 <button
                   type="button"
                   onClick={() =>
-                    handleQuickDemoFill('DISPATCHER', 'dispatch@sentinelgrid.local', 'Tactical Dispatch')
+                    handleQuickDemoFill('operator@sentinelgrid.local', 'Field Operator')
                   }
                   className="px-2.5 py-1.5 bg-slate-800/90 hover:bg-slate-700/80 border border-slate-700 rounded text-[11px] text-slate-300 text-left font-mono cursor-pointer"
                 >
-                  <div className="font-semibold text-blue-300">DISPATCHER Role</div>
-                  <div className="text-[10px] text-slate-400">dispatch@sentinelgrid.local</div>
+                  <div className="font-semibold text-emerald-300">Operator Account</div>
+                  <div className="text-[10px] text-slate-400">operator@sentinelgrid.local</div>
                 </button>
               </div>
             </div>

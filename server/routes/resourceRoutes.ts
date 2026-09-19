@@ -27,8 +27,22 @@ router.post('/', requireAuth, (req: Request, res: Response) => {
   try {
     const { name, type, location, capacity, statusDetails, availability } = req.body;
 
-    if (!name || !type || !location) {
-      return res.status(400).json({ error: 'Name, type, and location are required.' });
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ error: 'Resource name is required.' });
+    }
+
+    if (!location || typeof location !== 'string' || !location.trim()) {
+      return res.status(400).json({ error: 'Resource location is required.' });
+    }
+
+    const validTypes: ResourceType[] = ['AMBULANCE', 'RESCUE_TEAM', 'MEDICAL_TEAM', 'SHELTER', 'EMERGENCY_EQUIPMENT'];
+    if (!type || !validTypes.includes(type)) {
+      return res.status(400).json({ error: `Invalid resource type. Must be one of: ${validTypes.join(', ')}` });
+    }
+
+    const validAvailabilities: ResourceAvailability[] = ['AVAILABLE', 'DEPLOYED', 'MAINTENANCE', 'OFFLINE'];
+    if (availability && !validAvailabilities.includes(availability)) {
+      return res.status(400).json({ error: `Invalid availability. Must be one of: ${validAvailabilities.join(', ')}` });
     }
 
     const resource = resourceService.createResource({
@@ -55,7 +69,12 @@ router.patch('/:id/status', requireAuth, (req: Request, res: Response) => {
     const { availability, statusDetails } = req.body;
 
     if (!availability) {
-      return res.status(400).json({ error: 'Availability status is required' });
+      return res.status(400).json({ error: 'Availability status is required.' });
+    }
+
+    const validAvailabilities: ResourceAvailability[] = ['AVAILABLE', 'DEPLOYED', 'MAINTENANCE', 'OFFLINE'];
+    if (!validAvailabilities.includes(availability)) {
+      return res.status(400).json({ error: `Invalid availability. Must be one of: ${validAvailabilities.join(', ')}` });
     }
 
     const updated = resourceService.updateResourceStatus(

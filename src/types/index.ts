@@ -16,11 +16,12 @@ export type IncidentVerification = 'UNVERIFIED' | 'COMMUNITY_REPORTED' | 'OFFICI
 
 export interface IncidentLocation {
   id: string;
-  latitude: number;
-  longitude: number;
+  latitude?: number | null;
+  longitude?: number | null;
   address?: string;
   zone?: string;
   gridSquare?: string;
+  isUnavailable?: boolean;
 }
 
 export interface Incident {

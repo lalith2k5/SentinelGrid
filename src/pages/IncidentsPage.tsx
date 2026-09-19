@@ -319,13 +319,34 @@ export const IncidentsPage: React.FC<IncidentsPageProps> = ({ token, onOpenRepor
                     </td>
 
                     <td className="py-3.5 px-4 whitespace-nowrap text-slate-300">
-                      <div className="flex items-center gap-1.5">
-                        <MapPin className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                        <span>{incident.location?.address || 'Grid Sector Alpha'}</span>
-                      </div>
-                      <div className="text-[10px] text-slate-500 font-mono mt-0.5">
-                        {incident.location?.zone} • {incident.location?.gridSquare}
-                      </div>
+                      {incident.location?.isUnavailable || (!incident.location?.address && incident.location?.latitude == null && incident.location?.longitude == null && !incident.location?.zone && !incident.location?.gridSquare) ? (
+                        <div className="flex items-center gap-1.5 text-slate-500 italic">
+                          <MapPin className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+                          <span>Location unavailable</span>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-1.5">
+                            <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            <span>
+                              {incident.location?.address || (incident.location?.latitude != null && incident.location?.longitude != null
+                                ? `${incident.location.latitude.toFixed(4)}°, ${incident.location.longitude.toFixed(4)}°`
+                                : 'Coordinates unassigned')}
+                            </span>
+                          </div>
+                          <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+                            {[
+                              incident.location?.zone,
+                              incident.location?.gridSquare,
+                              incident.location?.latitude != null && incident.location?.longitude != null
+                                ? `${incident.location.latitude.toFixed(4)}°, ${incident.location.longitude.toFixed(4)}°`
+                                : null
+                            ]
+                              .filter(Boolean)
+                              .join(' • ') || 'Local sector unassigned'}
+                          </div>
+                        </>
+                      )}
                     </td>
 
                     <td className="py-3.5 px-4 whitespace-nowrap text-slate-400 font-mono text-[11px]">

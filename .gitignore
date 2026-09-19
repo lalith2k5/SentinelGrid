@@ -6,3 +6,5 @@ coverage/
 *.log
 .env*
 !.env.example
+.auth_secret
+data/.auth_secret

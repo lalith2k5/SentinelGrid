@@ -1,118 +1,15 @@
 {
   "version": 1,
-  "initializedAt": "2026-09-19T16:38:00.871Z",
-  "users": [
-    {
-      "id": "usr_1789836045183_19x1p",
-      "email": "commander@sentinelgrid.local",
-      "passwordHash": "34e4c666a6918317e5bdbfdcc8b175b27e52ba56a744483f0b3e9494d659adbc47c55321f416177cf372a839eac7b7e08ce07ee6a6a92c21e6630d535a094607",
-      "salt": "5298196317f17bd1af95109f87fb31f1",
-      "name": "Commander Ramos",
-      "role": "ADMIN",
-      "badgeNumber": "SG-001",
-      "department": "Emergency Operations Center",
-      "createdAt": "2026-09-19T16:40:45.183Z",
-      "updatedAt": "2026-09-19T16:40:45.183Z"
-    }
-  ],
-  "incidents": [
-    {
-      "id": "inc_1789836052836_tzm86",
-      "incidentNumber": "INC-2026-0001",
-      "title": "Electrical Transformer Surge on Ridge",
-      "description": "Local distribution sub-station transformer sparked with minor perimeter brushfire reported.",
-      "status": "OPEN",
-      "severity": "HIGH",
-      "verificationStatus": "UNVERIFIED",
-      "locationId": "loc_1789836052837_bzn",
-      "location": {
-        "id": "loc_1789836052837_bzn",
-        "incidentId": "inc_1789836052836_tzm86",
-        "latitude": 37.7749,
-        "longitude": -122.4194,
-        "address": "Substation 4, North Ridge Road",
-        "zone": "North Sector",
-        "gridSquare": "GS-04"
-      },
-      "reportedByUserId": "usr_1789836045183_19x1p",
-      "reportedByName": "Commander Ramos",
-      "priorityScore": 75,
-      "isDemoData": false,
-      "createdAt": "2026-09-19T16:40:52.836Z",
-      "updatedAt": "2026-09-19T16:40:52.836Z"
-    }
-  ],
-  "incidentLocations": [
-    {
-      "id": "loc_1789836052837_bzn",
-      "incidentId": "inc_1789836052836_tzm86",
-      "latitude": 37.7749,
-      "longitude": -122.4194,
-      "address": "Substation 4, North Ridge Road",
-      "zone": "North Sector",
-      "gridSquare": "GS-04"
-    }
-  ],
-  "resources": [
-    {
-      "id": "res_1789836057896_y7uet",
-      "name": "Rescue Squad 3 - USAR",
-      "type": "RESCUE_TEAM",
-      "availability": "AVAILABLE",
-      "location": "Station 8 Staging Area",
-      "capacity": "5 Technicians",
-      "statusDetails": "Heavy extrication gear ready",
-      "isDemoData": false,
-      "createdAt": "2026-09-19T16:40:57.896Z",
-      "updatedAt": "2026-09-19T16:40:57.896Z"
-    }
-  ],
+  "initializedAt": "2026-09-19T17:32:36.911Z",
+  "users": [],
+  "incidents": [],
+  "incidentLocations": [],
+  "resources": [],
   "responders": [],
   "messages": [],
   "meshNodes": [],
   "knowledgeDocuments": [],
-  "auditLogs": [
-    {
-      "actorId": "usr_1789836045183_19x1p",
-      "actorEmail": "Commander Ramos",
-      "action": "RESOURCE_REGISTERED",
-      "entityType": "Resource",
-      "entityId": "res_1789836057896_y7uet",
-      "details": "Registered resource Rescue Squad 3 - USAR (RESCUE_TEAM) - AVAILABLE",
-      "id": "audit_1789836057896_avunr",
-      "timestamp": "2026-09-19T16:40:57.896Z"
-    },
-    {
-      "actorId": "usr_1789836045183_19x1p",
-      "actorEmail": "Commander Ramos",
-      "action": "INCIDENT_CREATED",
-      "entityType": "Incident",
-      "entityId": "inc_1789836052836_tzm86",
-      "details": "Created incident INC-2026-0001: Electrical Transformer Surge on Ridge [Severity: HIGH]",
-      "id": "audit_1789836052837_cdvpb",
-      "timestamp": "2026-09-19T16:40:52.837Z"
-    },
-    {
-      "actorId": "usr_1789836045183_19x1p",
-      "actorEmail": "commander@sentinelgrid.local",
-      "actorRole": "ADMIN",
-      "action": "USER_LOGIN",
-      "entityType": "User",
-      "entityId": "usr_1789836045183_19x1p",
-      "details": "User logged in successfully with role ADMIN",
-      "id": "audit_1789836048393_wihvo",
-      "timestamp": "2026-09-19T16:40:48.393Z"
-    },
-    {
-      "actorId": "usr_1789836045183_19x1p",
-      "actorEmail": "commander@sentinelgrid.local",
-      "actorRole": "ADMIN",
-      "action": "USER_REGISTERED",
-      "entityType": "User",
-      "entityId": "usr_1789836045183_19x1p",
-      "details": "New ADMIN account created for Commander Ramos",
-      "id": "audit_1789836045183_d1bnj",
-      "timestamp": "2026-09-19T16:40:45.183Z"
-    }
-  ]
+  "auditLogs": [],
+  "lastIncidentSequence": {},
+  "revokedTokens": []
 }

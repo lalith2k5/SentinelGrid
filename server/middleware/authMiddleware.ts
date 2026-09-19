@@ -13,6 +13,7 @@ declare global {
   namespace Express {
     interface Request {
       user?: AuthenticatedUser;
+      token?: string;
     }
   }
 }
@@ -24,11 +25,16 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
   }
 
   const token = authHeader.substring(7).trim();
-  const payload = authService.verifyToken(token);
-  if (!payload) {
-    return res.status(401).json({ error: 'Session expired or invalid token. Please log in again.' });
+  if (!token) {
+    return res.status(401).json({ error: 'Unauthorized. Empty token provided.' });
   }
 
+  const payload = authService.verifyToken(token);
+  if (!payload) {
+    return res.status(401).json({ error: 'Session expired, revoked, or invalid token. Please log in again.' });
+  }
+
+  req.token = token;
   req.user = {
     userId: payload.userId,
     email: payload.email,

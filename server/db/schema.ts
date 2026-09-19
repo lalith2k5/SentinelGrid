@@ -26,13 +26,14 @@ export type IncidentVerification = 'UNVERIFIED' | 'COMMUNITY_REPORTED' | 'OFFICI
 export interface IncidentLocation {
   id: string;
   incidentId?: string;
-  latitude: number;
-  longitude: number;
+  latitude?: number | null;
+  longitude?: number | null;
   address?: string;
   landmark?: string;
   zone?: string;
   gridSquare?: string;
   accuracyMeters?: number;
+  isUnavailable?: boolean;
 }
 
 export interface Incident {
@@ -161,4 +162,6 @@ export interface DatabaseSchema {
   meshNodes: MeshNode[];
   knowledgeDocuments: KnowledgeDocument[];
   auditLogs: AuditLog[];
+  lastIncidentSequence?: Record<string, number>;
+  revokedTokens?: string[];
 }

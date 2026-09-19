@@ -79,7 +79,7 @@ export const MapPage: React.FC = () => {
         </div>
 
         <div className="absolute bottom-4 left-4 font-mono text-[10px] text-slate-600">
-          LAT: 37.7749° N • LON: 122.4194° W (DEFAULT FIELD SECTOR)
+          COORDINATES: UNCONFIGURED (AWAITING LOCAL HARDWARE SENSOR / MAP TILES)
         </div>
       </div>
     </div>

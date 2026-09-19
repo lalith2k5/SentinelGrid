@@ -1,8 +1,42 @@
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
 import { db } from '../db/database.ts';
 import { User, UserRole } from '../db/schema.ts';
 
-const TOKEN_SECRET = process.env.AUTH_SECRET || 'sentinelgrid-local-offline-secret-key-32chars!';
+/**
+ * Retrieve or generate a cryptographically secure 32-byte auth secret.
+ * Stored locally at data/.auth_secret with restricted permissions (0600)
+ * when process.env.AUTH_SECRET is not provided.
+ */
+function getOrCreateAuthSecret(): string {
+  if (process.env.AUTH_SECRET && process.env.AUTH_SECRET.trim().length >= 16) {
+    return process.env.AUTH_SECRET.trim();
+  }
+
+  const secretFilePath = path.join(process.cwd(), 'data', '.auth_secret');
+  try {
+    const dataDir = path.join(process.cwd(), 'data');
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+
+    if (fs.existsSync(secretFilePath)) {
+      const secret = fs.readFileSync(secretFilePath, 'utf-8').trim();
+      if (secret.length >= 32) {
+        return secret;
+      }
+    }
+
+    const generatedSecret = crypto.randomBytes(32).toString('hex');
+    fs.writeFileSync(secretFilePath, generatedSecret, { mode: 0o600, encoding: 'utf-8' });
+    return generatedSecret;
+  } catch {
+    return crypto.randomBytes(32).toString('hex');
+  }
+}
+
+const TOKEN_SECRET = getOrCreateAuthSecret();
 
 interface AuthTokenPayload {
   userId: string;
@@ -45,6 +79,10 @@ export class AuthService {
 
   public verifyToken(token: string): AuthTokenPayload | null {
     try {
+      if (db.isTokenRevoked(token)) {
+        return null;
+      }
+
       const parts = token.split('.');
       if (parts.length !== 2) return null;
       const [encodedPayload, signature] = parts;
@@ -59,15 +97,38 @@ export class AuthService {
     }
   }
 
+  public revokeToken(token: string): void {
+    db.revokeToken(token);
+  }
+
+  /**
+   * Check system registration state:
+   * First registered user becomes ADMIN. Subsequent users are OPERATOR.
+   */
+  public getRegistrationStatus(): { hasAdmin: boolean; nextRole: UserRole } {
+    const users = db.getUsers();
+    const hasAdmin = users.some(u => u.role === 'ADMIN');
+    return {
+      hasAdmin,
+      nextRole: hasAdmin ? 'OPERATOR' : 'ADMIN'
+    };
+  }
+
   public register(params: {
     email: string;
     password: string;
     name: string;
-    role: UserRole;
+    role?: UserRole;
     badgeNumber?: string;
     department?: string;
   }): { user: Omit<User, 'passwordHash' | 'salt'>; token: string } {
     const normalizedEmail = params.email.trim().toLowerCase();
+
+    // Strict email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(normalizedEmail)) {
+      throw new Error('Invalid email address format.');
+    }
 
     const existing = db.findUserByEmail(normalizedEmail);
     if (existing) {
@@ -78,6 +139,18 @@ export class AuthService {
       throw new Error('Password must be at least 8 characters long.');
     }
 
+    const trimmedName = params.name.trim();
+    if (trimmedName.length < 2 || trimmedName.length > 100) {
+      throw new Error('Name must be between 2 and 100 characters long.');
+    }
+
+    // Role assignment rules:
+    // First user in the database becomes ADMIN.
+    // Subsequent users are strictly OPERATOR (preventing privilege escalation on public registration).
+    const users = db.getUsers();
+    const hasAdmin = users.some(u => u.role === 'ADMIN');
+    const assignedRole: UserRole = hasAdmin ? 'OPERATOR' : 'ADMIN';
+
     const { hash, salt } = this.hashPassword(params.password);
     const id = `usr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const now = new Date().toISOString();
@@ -87,10 +160,10 @@ export class AuthService {
       email: normalizedEmail,
       passwordHash: hash,
       salt,
-      name: params.name.trim(),
-      role: params.role,
-      badgeNumber: params.badgeNumber?.trim(),
-      department: params.department?.trim(),
+      name: trimmedName,
+      role: assignedRole,
+      badgeNumber: params.badgeNumber?.trim() || undefined,
+      department: params.department?.trim() || undefined,
       createdAt: now,
       updatedAt: now
     };
@@ -100,11 +173,13 @@ export class AuthService {
     db.logAudit({
       actorId: id,
       actorEmail: normalizedEmail,
-      actorRole: params.role,
+      actorRole: assignedRole,
       action: 'USER_REGISTERED',
       entityType: 'User',
       entityId: id,
-      details: `New ${params.role} account created for ${params.name}`
+      details: hasAdmin
+        ? `Standard OPERATOR registration for ${trimmedName} (Role restricted by system)`
+        : `Initial PRIMARY ADMIN account created for ${trimmedName}`
     });
 
     const token = this.generateToken(newUser);
@@ -142,6 +217,15 @@ export class AuthService {
     const { passwordHash: _, salt: __, ...sanitizedUser } = user;
     return { user: sanitizedUser, token };
   }
+
+  public getAuthSecret(): string {
+    return TOKEN_SECRET;
+  }
+
+  public isTokenRevoked(token: string): boolean {
+    return db.isTokenRevoked(token);
+  }
 }
 
 export const authService = new AuthService();
+

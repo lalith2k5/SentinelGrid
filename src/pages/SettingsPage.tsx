@@ -8,15 +8,20 @@ import {
   Radio,
   CheckCircle2,
   Lock,
-  RefreshCw
+  RefreshCw,
+  Users,
+  ShieldAlert
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.tsx';
 import { StatusBadge } from '../components/common/StatusBadge.tsx';
+import { UserRole } from '../types/index.ts';
 
 export const SettingsPage: React.FC = () => {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const [dbStatus, setDbStatus] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [userAdminMsg, setUserAdminMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const fetchStatus = async () => {
     try {
@@ -33,9 +38,50 @@ export const SettingsPage: React.FC = () => {
     }
   };
 
+  const fetchUsers = async () => {
+    if (user?.role !== 'ADMIN' || !token) return;
+    try {
+      const res = await fetch('/api/auth/users', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAllUsers(data.users || []);
+      }
+    } catch (err) {
+      console.error('Failed to load users list', err);
+    }
+  };
+
+  const handleRoleChange = async (userId: string, newRole: UserRole) => {
+    if (!token) return;
+    setUserAdminMsg(null);
+    try {
+      const res = await fetch(`/api/auth/users/${userId}/role`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ role: newRole })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to update role');
+      }
+      setUserAdminMsg({ type: 'success', text: `Role updated to ${newRole} for ${data.user.name}` });
+      fetchUsers();
+    } catch (err: any) {
+      setUserAdminMsg({ type: 'error', text: err.message || 'Failed to update role' });
+    }
+  };
+
   useEffect(() => {
     fetchStatus();
-  }, []);
+    if (user?.role === 'ADMIN') {
+      fetchUsers();
+    }
+  }, [user?.role, token]);
 
   return (
     <div className="space-y-6 max-w-5xl">
@@ -127,6 +173,84 @@ export const SettingsPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Admin-only User & Role Administration Panel */}
+      {user?.role === 'ADMIN' && (
+        <div className="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden">
+          <div className="px-5 py-3 border-b border-slate-800 bg-slate-950 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Users className="w-4 h-4 text-purple-400" />
+              <h2 className="text-xs font-mono uppercase tracking-wider text-slate-200 font-semibold">
+                User & Role Administration (Incident Commander Access)
+              </h2>
+            </div>
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-purple-950/60 text-purple-300 border border-purple-800/80">
+              {allUsers.length} Registered Personnel
+            </span>
+          </div>
+
+          <div className="p-5 space-y-4">
+            <p className="text-xs text-slate-400 leading-relaxed">
+              New accounts register as OPERATOR by default. As an Administrator, you can assign elevated tactical roles below.
+            </p>
+
+            {userAdminMsg && (
+              <div
+                className={`p-3 rounded text-xs font-mono border ${
+                  userAdminMsg.type === 'success'
+                    ? 'bg-emerald-950/60 border-emerald-800 text-emerald-300'
+                    : 'bg-red-950/60 border-red-800 text-red-300'
+                }`}
+              >
+                {userAdminMsg.text}
+              </div>
+            )}
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-slate-800 text-slate-400 font-mono uppercase text-[10px]">
+                    <th className="py-2.5 px-3">Name & Email</th>
+                    <th className="py-2.5 px-3">Badge / Dept</th>
+                    <th className="py-2.5 px-3">Current Role</th>
+                    <th className="py-2.5 px-3 text-right">Assign Role</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60">
+                  {allUsers.map(u => (
+                    <tr key={u.id} className="hover:bg-slate-800/30">
+                      <td className="py-2.5 px-3">
+                        <div className="font-semibold text-slate-200">{u.name}</div>
+                        <div className="text-[11px] text-slate-400 font-mono">{u.email}</div>
+                      </td>
+                      <td className="py-2.5 px-3 text-slate-400 font-mono text-[11px]">
+                        <div>{u.badgeNumber || '—'}</div>
+                        <div className="text-slate-500 text-[10px]">{u.department || '—'}</div>
+                      </td>
+                      <td className="py-2.5 px-3">
+                        <StatusBadge type="role" value={u.role} />
+                      </td>
+                      <td className="py-2.5 px-3 text-right">
+                        <select
+                          value={u.role}
+                          disabled={u.id === user.id}
+                          onChange={e => handleRoleChange(u.id, e.target.value as UserRole)}
+                          className="bg-slate-950 border border-slate-800 text-slate-300 text-[11px] rounded px-2 py-1 focus:outline-hidden focus:border-purple-500 disabled:opacity-40 cursor-pointer"
+                        >
+                          <option value="ADMIN">ADMIN</option>
+                          <option value="DISPATCHER">DISPATCHER</option>
+                          <option value="RESPONDER">RESPONDER</option>
+                          <option value="OPERATOR">OPERATOR</option>
+                        </select>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Local Database & Persistence Status */}
       <div className="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden">

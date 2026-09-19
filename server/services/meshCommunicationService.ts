@@ -13,13 +13,13 @@ export class MeshCommunicationService {
       isImplemented: false,
       statusText: 'Simulation not started — Coming in Phase 2',
       description: 'Simulated LoRa / Meshtastic mesh packet broadcast, hop counting, and decentralized emergency message routing.',
-      offlineCapability: 'Operates over unlicensed ISM bands (915MHz/868MHz/433MHz) with zero cell or cloud infrastructure.'
+      offlineCapability: 'Actual radio frequencies and regulatory profiles (e.g., US 915MHz, EU 868MHz) will be configured in Phase 2 according to regional deployment hardware. Operates with zero cell or cloud infrastructure.'
     };
   }
 
   public getMeshMetrics() {
     return {
-      meshStatus: 'Simulation not started',
+      meshStatus: 'Phase 2 — Simulation not started',
       hardwareConnected: false,
       hardwareType: 'None (Simulation mode planned)',
       numberOfNodes: 0,
@@ -29,7 +29,7 @@ export class MeshCommunicationService {
       averageHopCount: 0,
       packetDeliveryRate: '0.0%',
       isConfigured: false,
-      notice: 'Phase 1 foundation: No LoRa hardware is connected. Simulation engine initializes in Phase 2.'
+      notice: 'Phase 1 foundation: No LoRa hardware is connected. Actual radio frequencies and regulatory profiles (e.g., US 915MHz, EU 868MHz) will be configured in Phase 2 according to regional deployment hardware.'
     };
   }
 }

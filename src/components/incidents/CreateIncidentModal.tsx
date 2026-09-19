@@ -19,8 +19,10 @@ export const CreateIncidentModal: React.FC<CreateIncidentModalProps> = ({
   const [description, setDescription] = useState('');
   const [severity, setSeverity] = useState<IncidentSeverity>('MEDIUM');
   const [locationAddress, setLocationAddress] = useState('');
-  const [zone, setZone] = useState('North Sector');
-  const [gridSquare, setGridSquare] = useState('GS-01');
+  const [zone, setZone] = useState('');
+  const [gridSquare, setGridSquare] = useState('');
+  const [latitude, setLatitude] = useState('');
+  const [longitude, setLongitude] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -30,6 +32,16 @@ export const CreateIncidentModal: React.FC<CreateIncidentModalProps> = ({
     e.preventDefault();
     if (!title.trim() || !description.trim()) {
       setError('Title and description are required.');
+      return;
+    }
+
+    if (latitude && (isNaN(Number(latitude)) || Number(latitude) < -90 || Number(latitude) > 90)) {
+      setError('Latitude must be a valid number between -90 and 90.');
+      return;
+    }
+
+    if (longitude && (isNaN(Number(longitude)) || Number(longitude) < -180 || Number(longitude) > 180)) {
+      setError('Longitude must be a valid number between -180 and 180.');
       return;
     }
 
@@ -47,9 +59,11 @@ export const CreateIncidentModal: React.FC<CreateIncidentModalProps> = ({
           title: title.trim(),
           description: description.trim(),
           severity,
-          locationAddress: locationAddress.trim(),
-          zone: zone.trim(),
-          gridSquare: gridSquare.trim()
+          locationAddress: locationAddress.trim() || undefined,
+          zone: zone.trim() || undefined,
+          gridSquare: gridSquare.trim() || undefined,
+          latitude: latitude.trim() !== '' ? Number(latitude.trim()) : null,
+          longitude: longitude.trim() !== '' ? Number(longitude.trim()) : null
         })
       });
 
@@ -63,6 +77,10 @@ export const CreateIncidentModal: React.FC<CreateIncidentModalProps> = ({
       setTitle('');
       setDescription('');
       setLocationAddress('');
+      setZone('');
+      setGridSquare('');
+      setLatitude('');
+      setLongitude('');
     } catch (err: any) {
       setError(err.message || 'Failed to submit incident');
     } finally {
@@ -130,41 +148,69 @@ export const CreateIncidentModal: React.FC<CreateIncidentModalProps> = ({
 
             <div>
               <label className="block text-xs font-mono text-slate-300 uppercase mb-1">
-                Sector / Zone
+                Sector / Zone (Optional)
               </label>
               <input
                 type="text"
                 value={zone}
                 onChange={e => setZone(e.target.value)}
-                placeholder="e.g. North Sector"
+                placeholder="e.g. Sector 4"
                 className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded text-sm text-slate-200 focus:outline-hidden focus:border-emerald-500"
-              >
-              </input>
+              />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-mono text-slate-300 uppercase mb-1">
-                Grid Square
+                Grid Square (Optional)
               </label>
               <input
                 type="text"
                 value={gridSquare}
                 onChange={e => setGridSquare(e.target.value)}
-                placeholder="GS-01"
+                placeholder="e.g. GS-01"
                 className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded text-sm text-slate-200 focus:outline-hidden focus:border-emerald-500"
               />
             </div>
             <div>
               <label className="block text-xs font-mono text-slate-300 uppercase mb-1">
-                Location / Landmark
+                Location / Landmark (Optional)
               </label>
               <input
                 type="text"
                 value={locationAddress}
                 onChange={e => setLocationAddress(e.target.value)}
-                placeholder="e.g. Mile Marker 18, West Pass"
+                placeholder="e.g. Mile Marker 18 (leave blank if unknown)"
+                className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded text-sm text-slate-200 focus:outline-hidden focus:border-emerald-500"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-mono text-slate-300 uppercase mb-1">
+                Latitude (Optional)
+              </label>
+              <input
+                type="number"
+                step="any"
+                value={latitude}
+                onChange={e => setLatitude(e.target.value)}
+                placeholder="e.g. 37.7749"
+                className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded text-sm text-slate-200 focus:outline-hidden focus:border-emerald-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-mono text-slate-300 uppercase mb-1">
+                Longitude (Optional)
+              </label>
+              <input
+                type="number"
+                step="any"
+                value={longitude}
+                onChange={e => setLongitude(e.target.value)}
+                placeholder="e.g. -122.4194"
                 className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded text-sm text-slate-200 focus:outline-hidden focus:border-emerald-500"
               />
             </div>

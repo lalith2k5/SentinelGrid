@@ -40,17 +40,37 @@ export class ResourceService {
     actorName?: string;
     actorId?: string;
   }): Resource {
+    const trimmedName = (params.name || '').trim();
+    if (!trimmedName || trimmedName.length < 2) {
+      throw new Error('Resource name is required and must be at least 2 characters long.');
+    }
+
+    const trimmedLocation = (params.location || '').trim();
+    if (!trimmedLocation || trimmedLocation.length < 2) {
+      throw new Error('Resource staging location is required and must be at least 2 characters long.');
+    }
+
+    const validTypes: ResourceType[] = ['AMBULANCE', 'RESCUE_TEAM', 'MEDICAL_TEAM', 'SHELTER', 'EMERGENCY_EQUIPMENT'];
+    if (!validTypes.includes(params.type)) {
+      throw new Error(`Invalid resource type. Allowed types: ${validTypes.join(', ')}`);
+    }
+
+    const validAvailabilities: ResourceAvailability[] = ['AVAILABLE', 'DEPLOYED', 'MAINTENANCE', 'OFFLINE'];
+    const availability: ResourceAvailability = params.availability && validAvailabilities.includes(params.availability)
+      ? params.availability
+      : 'AVAILABLE';
+
     const id = `res_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const now = new Date().toISOString();
 
     const resource: Resource = {
       id,
-      name: params.name.trim(),
+      name: trimmedName,
       type: params.type,
-      availability: params.availability || 'AVAILABLE',
-      location: params.location.trim(),
-      capacity: params.capacity?.trim(),
-      statusDetails: params.statusDetails?.trim(),
+      availability,
+      location: trimmedLocation,
+      capacity: params.capacity?.trim() || undefined,
+      statusDetails: params.statusDetails?.trim() || undefined,
       isDemoData: params.isDemoData ?? false,
       createdAt: now,
       updatedAt: now
@@ -64,7 +84,7 @@ export class ResourceService {
       action: 'RESOURCE_REGISTERED',
       entityType: 'Resource',
       entityId: id,
-      details: `Registered resource ${resource.name} (${resource.type}) - ${resource.availability}`
+      details: `Registered resource ${trimmedName} (${resource.type}) - ${resource.availability}`
     });
 
     return resource;
@@ -77,7 +97,12 @@ export class ResourceService {
     actorName?: string,
     actorId?: string
   ): Resource | undefined {
-    const updated = db.updateResource(id, { availability, statusDetails });
+    const validAvailabilities: ResourceAvailability[] = ['AVAILABLE', 'DEPLOYED', 'MAINTENANCE', 'OFFLINE'];
+    if (!validAvailabilities.includes(availability)) {
+      throw new Error(`Invalid availability status. Allowed values: ${validAvailabilities.join(', ')}`);
+    }
+
+    const updated = db.updateResource(id, { availability, statusDetails: statusDetails?.trim() });
     if (updated) {
       db.logAudit({
         actorId,

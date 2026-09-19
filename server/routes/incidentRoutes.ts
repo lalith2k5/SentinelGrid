@@ -35,19 +35,30 @@ router.get('/:id', requireAuth, (req: Request, res: Response) => {
 // Create new incident
 router.post('/', requireAuth, (req: Request, res: Response) => {
   try {
-    const { title, description, severity, locationAddress, zone, gridSquare } = req.body;
+    const { title, description, severity, locationAddress, zone, gridSquare, latitude, longitude } = req.body;
 
-    if (!title || !description) {
-      return res.status(400).json({ error: 'Incident title and description are required.' });
+    if (!title || typeof title !== 'string' || !title.trim()) {
+      return res.status(400).json({ error: 'Incident title is required.' });
+    }
+
+    if (!description || typeof description !== 'string' || !description.trim()) {
+      return res.status(400).json({ error: 'Incident description is required.' });
+    }
+
+    const validSeverities: IncidentSeverity[] = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFORMATIONAL'];
+    if (severity && !validSeverities.includes(severity)) {
+      return res.status(400).json({ error: `Invalid severity. Must be one of: ${validSeverities.join(', ')}` });
     }
 
     const incident = incidentService.createIncident({
       title,
       description,
-      severity: severity || 'MEDIUM',
+      severity: severity as IncidentSeverity,
       locationAddress,
       zone,
       gridSquare,
+      latitude: latitude !== undefined && latitude !== null && latitude !== '' ? Number(latitude) : null,
+      longitude: longitude !== undefined && longitude !== null && longitude !== '' ? Number(longitude) : null,
       reportedByUserId: req.user?.userId,
       reportedByName: req.user?.name,
       isDemoData: false
@@ -64,7 +75,12 @@ router.patch('/:id/status', requireAuth, (req: Request, res: Response) => {
   try {
     const { status } = req.body;
     if (!status) {
-      return res.status(400).json({ error: 'Status is required' });
+      return res.status(400).json({ error: 'Status is required.' });
+    }
+
+    const validStatuses: IncidentStatus[] = ['OPEN', 'INVESTIGATING', 'DISPATCHED', 'CONTAINED', 'RESOLVED'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
     }
 
     const updated = incidentService.updateIncidentStatus(
