@@ -17,9 +17,11 @@ import {
   MeshSimulationConfig,
   AIIncidentTriageRecord,
   Dispatch,
-  Responder
+  Responder,
+  KnowledgeDocument
 } from './schema.ts';
 import { Hazard, BlockedRoad, RouteResult } from '../gis/types.ts';
+import { DEFAULT_KNOWLEDGE_CORPUS } from '../knowledge/defaultCorpus.ts';
 
 /**
  * Hash bearer tokens with SHA-256 for secure revoked token persistence.
@@ -156,7 +158,7 @@ function createInitialSchema(): DatabaseSchema {
     meshPackets: [],
     meshEvents: [],
     meshConfig: createDefaultMeshConfig(),
-    knowledgeDocuments: [],
+    knowledgeDocuments: [...DEFAULT_KNOWLEDGE_CORPUS],
     auditLogs: [],
     aiTriageRecords: [],
     lastIncidentSequence: {},
@@ -227,7 +229,9 @@ class LocalDatabase {
           this.data.meshPackets = this.data.meshPackets || [];
           this.data.meshEvents = this.data.meshEvents || [];
           this.data.meshConfig = this.data.meshConfig || createDefaultMeshConfig();
-          this.data.knowledgeDocuments = this.data.knowledgeDocuments || [];
+          if (!this.data.knowledgeDocuments || this.data.knowledgeDocuments.length === 0) {
+            this.data.knowledgeDocuments = [...DEFAULT_KNOWLEDGE_CORPUS];
+          }
           this.data.auditLogs = this.data.auditLogs || [];
           this.data.aiTriageRecords = this.data.aiTriageRecords || [];
           this.data.lastIncidentSequence = this.data.lastIncidentSequence || {};
@@ -1228,6 +1232,78 @@ class LocalDatabase {
   public clearDispatches(): void {
     this.data.dispatches = [];
     this.saveSync();
+  }
+
+  // ==========================================
+  // PHASE 8: EMERGENCY KNOWLEDGE & RAG PERSISTENCE
+  // ==========================================
+
+  public getKnowledgeDocuments(): KnowledgeDocument[] {
+    this.data.knowledgeDocuments = this.data.knowledgeDocuments || [];
+    if (this.data.knowledgeDocuments.length === 0) {
+      this.data.knowledgeDocuments = [...DEFAULT_KNOWLEDGE_CORPUS];
+      this.saveSync();
+    }
+    return [...this.data.knowledgeDocuments];
+  }
+
+  public getKnowledgeDocumentById(id: string): KnowledgeDocument | undefined {
+    this.data.knowledgeDocuments = this.data.knowledgeDocuments || [];
+    return this.data.knowledgeDocuments.find(d => d.id === id || d.id.toUpperCase() === id.toUpperCase());
+  }
+
+  public insertKnowledgeDocument(doc: KnowledgeDocument): KnowledgeDocument {
+    this.assertOperational();
+    this.data.knowledgeDocuments = this.data.knowledgeDocuments || [];
+    const idx = this.data.knowledgeDocuments.findIndex(d => d.id === doc.id);
+    if (idx !== -1) {
+      throw new Error(`Knowledge document with ID "${doc.id}" already exists.`);
+    }
+    this.data.knowledgeDocuments.push(JSON.parse(JSON.stringify(doc)));
+    this.saveSync();
+    return doc;
+  }
+
+  public updateKnowledgeDocument(id: string, updates: Partial<KnowledgeDocument>): KnowledgeDocument {
+    this.assertOperational();
+    this.data.knowledgeDocuments = this.data.knowledgeDocuments || [];
+    const idx = this.data.knowledgeDocuments.findIndex(d => d.id === id || d.id.toUpperCase() === id.toUpperCase());
+    if (idx === -1) {
+      throw new Error(`Knowledge document with ID "${id}" not found.`);
+    }
+    this.data.knowledgeDocuments[idx] = {
+      ...this.data.knowledgeDocuments[idx],
+      ...updates,
+      id: this.data.knowledgeDocuments[idx].id,
+      updatedAt: new Date().toISOString()
+    };
+    this.saveSync();
+    return { ...this.data.knowledgeDocuments[idx] };
+  }
+
+  public deleteKnowledgeDocument(id: string): boolean {
+    this.assertOperational();
+    this.data.knowledgeDocuments = this.data.knowledgeDocuments || [];
+    const initialLen = this.data.knowledgeDocuments.length;
+    this.data.knowledgeDocuments = this.data.knowledgeDocuments.filter(d => d.id !== id && d.id.toUpperCase() !== id.toUpperCase());
+    if (this.data.knowledgeDocuments.length !== initialLen) {
+      this.saveSync();
+      return true;
+    }
+    return false;
+  }
+
+  public clearKnowledgeDocuments(): void {
+    this.assertOperational();
+    this.data.knowledgeDocuments = [];
+    this.saveSync();
+  }
+
+  public resetKnowledgeCorpus(): KnowledgeDocument[] {
+    this.assertOperational();
+    this.data.knowledgeDocuments = [...DEFAULT_KNOWLEDGE_CORPUS];
+    this.saveSync();
+    return [...this.data.knowledgeDocuments];
   }
 }
 

@@ -10,6 +10,7 @@ import meshRoutes from './server/routes/meshRoutes.ts';
 import routingRoutes from './server/routes/routingRoutes.ts';
 import dispatchRoutes from './server/routes/dispatchRoutes.ts';
 import mapRoutes from './server/routes/mapRoutes.ts';
+import knowledgeRoutes from './server/routes/knowledgeRoutes.ts';
 
 const PORT = Number(process.env.PORT) || 3000;
 
@@ -45,6 +46,8 @@ async function startServer() {
   app.use('/api/routing', routingRoutes);
   app.use('/api/dispatches', dispatchRoutes);
   app.use('/api/map', mapRoutes);
+  app.use('/api/knowledge', knowledgeRoutes);
+  app.use('/api/rag', knowledgeRoutes);
 
   // Vite development integration vs production static serving
   if (process.env.NODE_ENV !== 'production') {

@@ -22,6 +22,11 @@ import dispatchRoutes from '../server/routes/dispatchRoutes.ts';
 import mapRoutes from '../server/routes/mapRoutes.ts';
 import { offlineOperationalMapProvider, OfflineOperationalMapProvider, DEFAULT_MAP_LAYERS } from '../server/gis/OfflineOperationalMapProvider.ts';
 import { DispatchStatus } from '../server/db/schema.ts';
+import { ragKnowledgeService } from '../server/services/ragKnowledgeService.ts';
+import { localRetrievalEngine, tokenize } from '../server/knowledge/retrievalEngine.ts';
+import { ragEngine } from '../server/knowledge/ragEngine.ts';
+import { DEFAULT_KNOWLEDGE_CORPUS, CORPUS_METADATA } from '../server/knowledge/defaultCorpus.ts';
+import knowledgeRoutes from '../server/routes/knowledgeRoutes.ts';
 
 // Dedicated test database file so we don't clobber production or local session data
 const TEST_DB_PATH = path.join(process.cwd(), 'data', 'sentinelgrid.test.json');
@@ -6587,6 +6592,511 @@ async function runAllTests() {
       const currentDispatch = db.getDispatchById(dispatch.dispatchId);
       assert.equal(currentDispatch?.resourceId, resA, 'Dispatch must still point to Resource A');
       assert.equal(currentDispatch?.reassignmentHistory?.length || 0, 0, 'No partial reassignment history should remain');
+    }),
+
+    // ==========================================
+    // PHASE 8: OFFLINE EMERGENCY KNOWLEDGE BASE & RAG TESTS
+    // ==========================================
+
+    test('PHASE8-001: Emergency knowledge corpus contains at least 25 authoritative documents covering required categories', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const docs = ragKnowledgeService.getDocuments();
+      assert.ok(docs.length >= 25, `Corpus must contain at least 25 documents, got ${docs.length}`);
+
+      const categories = new Set(docs.map(d => d.category));
+      const requiredCategories = [
+        'TRAUMA_BLEEDING',
+        'BURNS',
+        'FRACTURES_DISLOCATION',
+        'UNCONSCIOUSNESS',
+        'RESPIRATORY_DISTRESS',
+        'CARDIAC_CHEST_PAIN',
+        'ENVIRONMENTAL_HEAT',
+        'ENVIRONMENTAL_COLD',
+        'NATURAL_FLOOD',
+        'NATURAL_FIRE',
+        'STRUCTURAL_COLLAPSE',
+        'LANDSLIDE',
+        'HAZMAT_CHEMICAL',
+        'ELECTRICAL_HAZARDS',
+        'EVACUATION_SHELTER',
+        'SEARCH_AND_RESCUE',
+        'RESPONDER_SAFETY'
+      ];
+
+      for (const reqCat of requiredCategories) {
+        assert.ok(categories.has(reqCat), `Corpus must include category ${reqCat}`);
+      }
+
+      // Check document structure integrity
+      for (const doc of docs) {
+        assert.ok(doc.id, 'Document must have ID');
+        assert.ok(doc.title, 'Document must have title');
+        assert.ok(doc.category, 'Document must have category');
+        assert.ok(doc.summary, 'Document must have summary');
+        assert.ok(doc.content, 'Document must have content');
+        assert.ok(Array.isArray(doc.actionSteps), 'Document must have actionSteps array');
+        assert.ok(doc.actionSteps.length > 0, 'Document must have at least one action step');
+        assert.ok(Array.isArray(doc.safetyPrecautions), 'Document must have safetyPrecautions array');
+      }
+    }),
+
+    test('PHASE8-002: Zero-Cloud Invariant: RAG subsystem reports zero cloud dependencies and 100% offline capability', async () => {
+      const info = ragKnowledgeService.getInfo();
+      assert.equal(info.phasePlanned, 8);
+      assert.equal(info.isImplemented, true);
+      assert.ok(info.offlineCapability.includes('offline-first'));
+      assert.ok(info.statusText.includes('Zero-cloud'));
+
+      const metadata = ragKnowledgeService.getCorpusMetadata();
+      assert.equal(metadata.version, '1.0.0');
+      assert.equal(metadata.isOffline, true);
+      assert.ok(metadata.totalDocuments >= 25);
+    }),
+
+    test('PHASE8-003: Local tokenization correctly normalizes text and strips stop words', async () => {
+      const tokens = tokenize('The patient is with severe breathing distress and chest pain!');
+      assert.ok(tokens.includes('patient'));
+      assert.ok(tokens.includes('severe'));
+      assert.ok(tokens.includes('breathing'));
+      assert.ok(tokens.includes('distress'));
+      assert.ok(tokens.includes('chest'));
+      assert.ok(tokens.includes('pain'));
+
+      // Verify stop words excluded
+      assert.ok(!tokens.includes('the'));
+      assert.ok(!tokens.includes('is'));
+      assert.ok(!tokens.includes('and'));
+      assert.ok(!tokens.includes('with'));
+    }),
+
+    test('PHASE8-004: Lexical keyword scoring awards points for query overlap deterministically', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const docs = ragKnowledgeService.getDocuments();
+
+      const result = localRetrievalEngine.retrieve(docs, {
+        query: 'arterial bleeding tourniquet hemorrhage',
+        category: 'TRAUMA_BLEEDING'
+      });
+
+      assert.ok(result.items.length > 0);
+      const top = result.items[0];
+      assert.equal(top.documentId, 'DOC-MED-TRAUMA-001', 'Top result should be Severe Bleeding and Hemorrhage Control');
+      assert.ok(top.relevanceScore >= 60, `Score should be high, got ${top.relevanceScore}`);
+      assert.ok(top.scoreBreakdown.keywordScore > 10, 'Keyword score should be positive');
+      assert.ok(top.matchedKeywords.length > 0, 'Matched keywords should be populated');
+    }),
+
+    test('PHASE8-005: Multi-factor scoring correctly combines category, hazard, and severity bonuses', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const docs = ragKnowledgeService.getDocuments();
+
+      const result = localRetrievalEngine.retrieve(docs, {
+        query: 'downed power line water hazard',
+        category: 'ELECTRICAL_HAZARDS',
+        hazards: ['ELECTRICAL_SHOCK', 'FLOOD'],
+        severity: 'P1'
+      });
+
+      assert.ok(result.items.length > 0);
+      const top = result.items[0];
+      assert.equal(top.documentId, 'DOC-HAZ-ELEC-016', 'Top match should be Electrical Hazard protocol');
+      assert.equal(top.scoreBreakdown.categoryScore, 25, 'Category score should be 25');
+      assert.ok(top.scoreBreakdown.hazardScore >= 10, 'Hazard score should be at least 10');
+      assert.ok(top.scoreBreakdown.severityScore >= 8, 'Severity score should be at least 8');
+    }),
+
+    test('PHASE8-006: Outdated protocol penalty reduces score by 30% for documents older than 365 days', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const docs = ragKnowledgeService.getDocuments();
+      const targetDoc = docs.find(d => d.id === 'DOC-MED-TRAUMA-001')!;
+
+      const freshDoc = { ...targetDoc, lastReviewed: new Date().toISOString(), isOutdated: false };
+      const twoYearsAgo = new Date(Date.now() - 700 * 24 * 60 * 60 * 1000).toISOString();
+      const outdatedDoc = { ...targetDoc, lastReviewed: twoYearsAgo, isOutdated: false };
+
+      const freshResult = localRetrievalEngine.retrieve([freshDoc], {
+        query: 'bleeding tourniquet',
+        category: 'TRAUMA_BLEEDING'
+      });
+
+      const outdatedResult = localRetrievalEngine.retrieve([outdatedDoc], {
+        query: 'bleeding tourniquet',
+        category: 'TRAUMA_BLEEDING'
+      });
+
+      assert.ok(freshResult.items.length === 1);
+      assert.ok(outdatedResult.items.length === 1);
+      assert.ok(outdatedResult.items[0].isOutdated, 'Outdated flag must be true');
+      assert.ok(outdatedResult.items[0].scoreBreakdown.outdatedPenalty > 0, 'Outdated penalty must be applied');
+      assert.ok(freshResult.items[0].relevanceScore > outdatedResult.items[0].relevanceScore, 'Fresh document must score higher');
+    }),
+
+    test('PHASE8-007: Deterministic ranking orders by relevance score descending with document ID tie-breaking', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const docs = ragKnowledgeService.getDocuments();
+
+      const run1 = localRetrievalEngine.retrieve(docs, { query: 'respiratory inhalational burns smoke' });
+      const run2 = localRetrievalEngine.retrieve(docs, { query: 'respiratory inhalational burns smoke' });
+
+      assert.deepEqual(
+        run1.items.map(i => i.documentId),
+        run2.items.map(i => i.documentId),
+        'Retrieval order must be strictly deterministic across multiple executions'
+      );
+
+      for (let i = 0; i < run1.items.length - 1; i++) {
+        assert.ok(
+          run1.items[i].relevanceScore >= run1.items[i + 1].relevanceScore,
+          'Items must be sorted descending by relevance score'
+        );
+      }
+    }),
+
+    test('PHASE8-008: Insufficient local evidence threshold returns INSUFFICIENT_LOCAL_EVIDENCE when no match meets threshold', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const docs = ragKnowledgeService.getDocuments();
+
+      const result = ragEngine.query(docs, {
+        query: 'quantum astrophysics warp drive calibration'
+      });
+
+      assert.equal(result.status, 'INSUFFICIENT_LOCAL_EVIDENCE');
+      assert.equal(result.retrievalConfidence, 'LOW');
+      assert.equal(result.retrievedDocuments.length, 0);
+      assert.ok(result.evidenceSummary.includes('INSUFFICIENT_LOCAL_EVIDENCE'));
+      assert.equal(result.requiresHumanReview, true);
+    }),
+
+    test('PHASE8-009: Conflict detection identifies contradictory actions across matched manuals', async () => {
+      const docA: any = {
+        id: 'DOC-A',
+        title: 'Decontamination Protocol',
+        category: 'HAZMAT_CHEMICAL',
+        version: '1.0.0',
+        source: 'SOP',
+        status: 'ACTIVE',
+        content: 'Flush exposed skin with copious water.',
+        actionSteps: ['Flush exposed skin with copious water immediately'],
+        safetyPrecautions: ['Wear Level B PPE'],
+        contraindications: []
+      };
+
+      const docB: any = {
+        id: 'DOC-B',
+        title: 'Water-Reactive Chemical Safety Guide',
+        category: 'HAZMAT_CHEMICAL',
+        version: '1.0.0',
+        source: 'SOP',
+        status: 'ACTIVE',
+        content: 'Do NOT wash water-reactive compounds with water.',
+        actionSteps: ['Smother with dry sand'],
+        safetyPrecautions: ['Water contact causes toxic exothermic reaction'],
+        contraindications: ['Do not use water or liquid sprays']
+      };
+
+      const result = ragEngine.query([docA, docB], {
+        query: 'chemical decontamination water',
+        category: 'HAZMAT_CHEMICAL'
+      });
+
+      assert.equal(result.hasConflicts, true, 'Should detect water reactivity conflict');
+      assert.equal(result.status, 'CONFLICTING_KNOWLEDGE');
+      assert.equal(result.requiresHumanReview, true);
+      assert.ok(result.conflictingDetails !== null);
+    }),
+
+    test('PHASE8-010: Human review gate flags P1 critical incidents, low confidence, and outdated protocols', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const docs = ragKnowledgeService.getDocuments();
+
+      const resultP1 = ragEngine.query(docs, {
+        query: 'severe head trauma unconsciousness',
+        severity: 'P1'
+      });
+
+      assert.equal(resultP1.requiresHumanReview, true);
+      assert.ok(resultP1.humanReviewReasons.some(r => r.includes('HIGH_SEVERITY') || r.includes('HIGH_RISK')));
+    }),
+
+    test('PHASE8-011: Action checklist and safety precautions synthesis extracts structured steps from matched docs', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const docs = ragKnowledgeService.getDocuments();
+
+      const result = ragEngine.query(docs, {
+        query: 'crush syndrome structural collapse trapped victim',
+        category: 'STRUCTURAL_COLLAPSE'
+      });
+
+      assert.ok(result.actionChecklist.length > 0, 'Action checklist must contain steps');
+      assert.ok(result.safetyWarnings.length > 0, 'Safety warnings must be populated');
+      assert.ok(result.contraindications.length > 0, 'Contraindications must be populated');
+      assert.ok(result.recommendations.length > 0, 'Structured recommendations must be populated');
+
+      const topRec = result.recommendations[0];
+      assert.ok(topRec.sourceDocumentId);
+      assert.ok(topRec.sourceDocumentTitle);
+      assert.ok(topRec.rationale);
+    }),
+
+    test('PHASE8-012: Non-mutation invariant: RAG queries NEVER mutate incidents, resources, or dispatches', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+
+      const inc = db.insertIncident({
+        id: 'INC-MUT-001',
+        incidentNumber: 'INC-2026-MUT01',
+        title: 'Chemical Tanker Rollover',
+        description: 'Tanker leaking unknown gas',
+        severity: 'HIGH',
+        status: 'DISPATCHED',
+        verificationStatus: 'OFFICIAL_VERIFIED',
+        priorityScore: 80,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+
+      const res = db.insertResource({
+        id: 'RES-MUT-001',
+        name: 'HazMat Unit 1',
+        type: 'MEDICAL_TEAM',
+        status: 'ASSIGNED',
+        availability: 'ASSIGNED',
+        latitude: 10.0,
+        longitude: 10.0,
+        location: 'Zone 1',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+
+      const disp = db.insertDispatch({
+        dispatchId: 'DSP-MUT-001',
+        incidentId: inc.id,
+        resourceId: res.id,
+        status: 'DISPATCHED',
+        priority: 'P2',
+        routeInfo: null,
+        dispatchNotes: '',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        createdBy: 'Admin'
+      });
+
+      // Execute RAG query
+      ragKnowledgeService.queryRAG({
+        incidentId: inc.id,
+        query: 'Toxic gas leak evacuation perimeter'
+      });
+
+      // Assert zero mutations
+      const incAfter = db.findIncidentById(inc.id)!;
+      const resAfter = db.getResourceById(res.id)!;
+      const dispAfter = db.getDispatchById(disp.dispatchId)!;
+
+      assert.equal(incAfter.status, 'DISPATCHED', 'Incident status must remain unchanged');
+      assert.equal(incAfter.severity, 'HIGH', 'Incident severity must remain unchanged');
+      assert.equal(resAfter.status, 'ASSIGNED', 'Resource status must remain unchanged');
+      assert.equal(dispAfter.status, 'DISPATCHED', 'Dispatch status must remain unchanged');
+    }),
+
+    test('PHASE8-013: Knowledge document CRUD: Admin can create, update, retrieve, and delete documents', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+
+      const docId = 'TEST-EMERG-999';
+      const created = ragKnowledgeService.createDocument(
+        {
+          id: docId,
+          title: 'Custom Flood Barrier Deployment Protocol',
+          category: 'NATURAL_FLOOD',
+          version: '1.0.0',
+          source: 'Regional Flood SOP',
+          sourceOrganization: 'Regional Emergency Office',
+          provenanceType: 'LOCAL_DEMONSTRATION',
+          publicationDate: '2026-03-01',
+          lastReviewed: new Date().toISOString(),
+          tags: ['flood', 'barrier'],
+          hazards: ['FLOOD'],
+          severityLevels: ['P1', 'P2'],
+          applicableIncidentTypes: ['FLOOD'],
+          summary: 'Guidelines for rapid deployment of inflatable flood barriers.',
+          content: 'Deploy barriers on high ground before water levels reach threshold.',
+          actionSteps: ['Survey topographic incline', 'Anchor perimeter barriers'],
+          safetyPrecautions: ['Maintain safety lines in swift water'],
+          contraindications: ['Do not deploy barriers on unstable sand foundations'],
+          keywords: ['flood', 'barrier', 'water', 'sandbag'],
+          status: 'ACTIVE',
+          priority: 8
+        },
+        { userId: 'admin-1', role: 'ADMIN', name: 'Admin Commander' }
+      );
+
+      assert.equal(created.id, docId);
+      assert.equal(created.title, 'Custom Flood Barrier Deployment Protocol');
+
+      // Retrieve
+      const fetched = ragKnowledgeService.getDocumentById(docId);
+      assert.ok(fetched);
+      assert.equal(fetched.title, created.title);
+
+      // Update
+      const updated = ragKnowledgeService.updateDocument(
+        docId,
+        { summary: 'Updated deployment protocol with faster inflation.' },
+        { userId: 'admin-1', role: 'ADMIN', name: 'Admin Commander' }
+      );
+      assert.equal(updated.summary, 'Updated deployment protocol with faster inflation.');
+
+      // Audit log logged
+      const audit = db.getAuditLogs().find(a => a.entityId === docId);
+      assert.ok(audit, 'Audit log must record creation/update');
+
+      // Delete
+      const deleted = db.deleteKnowledgeDocument(docId);
+      assert.equal(deleted, true);
+      assert.equal(ragKnowledgeService.getDocumentById(docId), undefined);
+    }),
+
+    test('PHASE8-014: Protocol Versioning: Admin can publish new version with audit history and changelog', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+
+      const docId = 'DOC-MED-TRAUMA-001';
+      const beforeDoc = ragKnowledgeService.getDocumentById(docId)!;
+      const initialHistoryLen = beforeDoc.versionHistory?.length || 0;
+
+      const updated = ragKnowledgeService.publishNewVersion(
+        docId,
+        '1.1.0',
+        'Updated tourniquet re-evaluation time interval to 120 minutes per 2026 TCCC guideline.',
+        { summary: 'Updated hemorrhage protocol.' },
+        { userId: 'admin-1', role: 'ADMIN', name: 'Medical Director' }
+      );
+
+      assert.equal(updated.version, '1.1.0');
+      assert.equal(updated.summary, 'Updated hemorrhage protocol.');
+      assert.equal(updated.versionHistory?.length, initialHistoryLen + 1);
+      assert.equal(updated.versionHistory![0].version, '1.1.0');
+      assert.ok(updated.versionHistory![0].changeLog.includes('TCCC guideline'));
+    }),
+
+    test('PHASE8-015: Status filtering: Inactive and archived documents are excluded from default RAG retrieval', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+
+      const docId = 'DOC-MED-TRAUMA-001';
+      ragKnowledgeService.setDocumentStatus(docId, 'INACTIVE', { userId: 'admin-1', role: 'ADMIN' });
+
+      const result = localRetrievalEngine.retrieve(ragKnowledgeService.getDocuments(), {
+        query: 'arterial bleeding tourniquet',
+        category: 'TRAUMA_BLEEDING'
+      });
+
+      const hasInactive = result.items.some(i => i.documentId === docId);
+      assert.equal(hasInactive, false, 'Inactive document must not appear in standard retrieval');
+
+      // When includeInactive=true, it should be retrieved
+      const resultWithInactive = localRetrievalEngine.retrieve(ragKnowledgeService.getDocuments(), {
+        query: 'arterial bleeding tourniquet',
+        category: 'TRAUMA_BLEEDING',
+        includeInactive: true
+      });
+
+      const hasWithFlag = resultWithInactive.items.some(i => i.documentId === docId);
+      assert.equal(hasWithFlag, true, 'Inactive document should appear when includeInactive is true');
+    }),
+
+    test('PHASE8-016: API GET /api/knowledge and /api/knowledge/categories return structured data', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+
+      const reqDocs = mockReqRes({ query: {} });
+      const getDocsHandler = (knowledgeRoutes as any).stack.find((r: any) => r.route?.path === '/' && r.route?.methods?.get).route.stack[0].handle;
+      getDocsHandler(reqDocs.req, reqDocs.res, () => {});
+      assert.equal(reqDocs.getStatus(), 200);
+      const body = reqDocs.getData();
+      assert.equal(body.success, true);
+      assert.ok(body.count >= 25);
+      assert.ok(Array.isArray(body.documents));
+
+      // Invoke categories route
+      const catsRes = mockReqRes({});
+      (knowledgeRoutes as any).stack.find((r: any) => r.route?.path === '/categories').route.stack[0].handle(catsRes.req, catsRes.res, () => {});
+      assert.equal(catsRes.getStatus(), 200);
+      const catsBody = catsRes.getData();
+      assert.equal(catsBody.success, true);
+      assert.ok(catsBody.categories.length > 5);
+    }),
+
+    test('PHASE8-017: API POST /api/knowledge/retrieve executes deterministic RAG query', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+
+      const req = mockReqRes({
+        body: {
+          query: 'flash flood trapped vehicle water rising',
+          category: 'NATURAL_FLOOD',
+          hazards: ['FLOOD'],
+          severity: 'P1'
+        }
+      });
+
+      const retrieveHandler = (knowledgeRoutes as any).stack.find((r: any) => r.route?.path === '/retrieve').route.stack[0].handle;
+      retrieveHandler(req.req, req.res, () => {});
+
+      assert.equal(req.getStatus(), 200);
+      const body = req.getData();
+      assert.equal(body.success, true);
+      assert.ok(body.retrievedDocuments.length > 0);
+      assert.ok(body.actionChecklist.length > 0);
+      assert.ok(body.medicalDisclaimer);
+      assert.equal(body.isOffline, true);
+    }),
+
+    test('PHASE8-018: API RBAC: Creation and versioning require ADMIN role', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+
+      // Create with non-admin should be rejected by requireRole('ADMIN')
+      const operatorUser = { id: 'op-1', email: 'op@grid.local', role: 'OPERATOR' };
+      const req = mockReqRes({
+        user: operatorUser,
+        body: { id: 'UNAUTH-01', title: 'Unauthorized', category: 'MEDICAL_EMERGENCY', content: 'test' }
+      });
+
+      const roleMiddleware = requireRole('ADMIN');
+      roleMiddleware(req.req, req.res, () => {});
+
+      assert.equal(req.getStatus(), 403, 'Operator must be forbidden from creating documents');
+    }),
+
+    test('PHASE8-019: Emergency medical safety disclaimer is included on every RAG query output', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const result = ragKnowledgeService.queryRAG({
+        query: 'cardiac chest pain CPR instructions'
+      });
+
+      assert.ok(result.medicalDisclaimer, 'Medical disclaimer must be present');
+      assert.ok(result.medicalDisclaimer.includes('DECISION SUPPORT ONLY'));
+      assert.ok(result.medicalDisclaimer.includes('clinical diagnosis'));
+    }),
+
+    test('PHASE8-020: Integration with AI Triage: RAG query auto-enriches with incident triage category, hazards, and symptoms', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+
+      const inc = incidentService.createIncident({
+        title: 'Building Collapse with Trapped Workers',
+        description: 'Concrete slab failure, 3 victims trapped under heavy rubble with bleeding',
+        severity: 'CRITICAL',
+        reportedByName: 'Field Scout'
+      });
+
+      // Run AI triage
+      const triage = await triageService.runTriage(inc.id);
+
+      // Query RAG passing incidentId only
+      const ragResult = ragKnowledgeService.queryRAG({
+        incidentId: inc.id
+      });
+
+      assert.ok(ragResult.retrievedDocuments.length > 0);
+      assert.equal(ragResult.incidentId, inc.id);
+      assert.equal(ragResult.aiTriageConfidence, triage.confidence);
+      assert.equal(ragResult.requiresHumanReview, true);
+      assert.ok(ragResult.actionChecklist.length > 0);
     })
   ];
 

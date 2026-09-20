@@ -15,6 +15,7 @@ import {
   ChevronUp
 } from 'lucide-react';
 import { Incident, AIIncidentTriageRecord } from '../../types/index.ts';
+import { IncidentRAGSupport } from '../knowledge/IncidentRAGSupport.tsx';
 
 interface TriagePanelProps {
   incident: Incident;
@@ -390,6 +391,13 @@ export const TriagePanel: React.FC<TriagePanelProps> = ({
           <div className="p-2 bg-slate-900/30 border border-slate-800/60 rounded text-[10px] text-slate-400 font-mono">
             <strong>NOTICE:</strong> SentinelGrid AI is an advisory operational triage assistant. It extracts indicators from incident reports and does NOT perform autonomous medical diagnosis or prescribe clinical care.
           </div>
+
+          {/* Phase 8: Offline RAG Protocol Decision Support */}
+          <IncidentRAGSupport
+            incident={incident}
+            latestTriage={latestTriage}
+            token={token}
+          />
         </div>
       )}
 

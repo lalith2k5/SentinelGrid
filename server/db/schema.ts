@@ -375,19 +375,76 @@ export interface MeshNode {
   createdAt: string;
 }
 
-export type KnowledgeCategory = 'FIRST_AID' | 'TRIAGE_PROTOCOLS' | 'HAZMAT' | 'SHELTER_SPECS' | 'COMMUNICATION_CODES';
-export type KnowledgeStatus = 'INDEXED' | 'PENDING' | 'DRAFT';
+export type KnowledgeCategory =
+  | 'MEDICAL_EMERGENCY'
+  | 'TRAUMA_BLEEDING'
+  | 'BURNS'
+  | 'FRACTURES_DISLOCATION'
+  | 'UNCONSCIOUSNESS'
+  | 'RESPIRATORY_DISTRESS'
+  | 'CARDIAC_CHEST_PAIN'
+  | 'SEIZURES'
+  | 'ENVIRONMENTAL_HEAT'
+  | 'ENVIRONMENTAL_COLD'
+  | 'DEHYDRATION_SHOCK'
+  | 'NATURAL_FLOOD'
+  | 'NATURAL_FIRE'
+  | 'STRUCTURAL_COLLAPSE'
+  | 'LANDSLIDE'
+  | 'HAZMAT_CHEMICAL'
+  | 'ELECTRICAL_HAZARDS'
+  | 'EVACUATION_SHELTER'
+  | 'SEARCH_AND_RESCUE'
+  | 'CROWD_SAFETY'
+  | 'EMERGENCY_COMMUNICATIONS'
+  | 'RESPONDER_SAFETY'
+  | 'HAZARD_ZONE_PRECAUTIONS'
+  | 'FIRST_AID'
+  | 'TRIAGE_PROTOCOLS'
+  | 'HAZMAT'
+  | 'SHELTER_SPECS'
+  | 'COMMUNICATION_CODES';
+
+export type KnowledgeStatus = 'ACTIVE' | 'INACTIVE' | 'ARCHIVED' | 'DRAFT' | 'INDEXED' | 'PENDING';
+export type ProvenanceType = 'LOCAL_DEMONSTRATION' | 'AUTHORITATIVE_EXTERNAL';
+
+export interface KnowledgeDocumentVersion {
+  version: string;
+  modifiedAt: string;
+  modifiedBy: string;
+  changeLog: string;
+  contentSnippet?: string;
+}
 
 export interface KnowledgeDocument {
   id: string;
   title: string;
-  category: KnowledgeCategory;
+  category: KnowledgeCategory | string;
+  subcategory?: string;
   version: string;
   source: string;
+  sourceOrganization?: string;
+  provenanceType?: ProvenanceType;
+  publicationDate?: string;
+  lastReviewed?: string;
+  expirationDate?: string;
+  isOutdated?: boolean;
   summary: string;
-  fullTextPath?: string;
+  content: string;
+  keywords?: string[];
+  tags?: string[];
+  hazards?: string[];
+  severityLevels?: string[];
+  applicableIncidentTypes?: string[];
+  priority?: number;
   status: KnowledgeStatus;
+  actionSteps?: string[];
+  safetyPrecautions?: string[];
+  contraindications?: string[];
+  versionHistory?: KnowledgeDocumentVersion[];
+  fullTextPath?: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface AuditLog {
