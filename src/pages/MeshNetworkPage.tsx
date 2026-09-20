@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext.tsx';
 import {
   Radio,
   WifiOff,
@@ -13,13 +14,16 @@ import {
 import { EmptyState } from '../components/common/EmptyState.tsx';
 
 export const MeshNetworkPage: React.FC = () => {
+  const { token } = useAuth();
   const [metrics, setMetrics] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   const fetchMeshMetrics = async () => {
     try {
       setIsLoading(true);
-      const res = await fetch('/api/system/mesh-metrics');
+      const res = await fetch('/api/system/mesh-metrics', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
       if (res.ok) {
         const data = await res.json();
         setMetrics(data);
@@ -33,7 +37,7 @@ export const MeshNetworkPage: React.FC = () => {
 
   useEffect(() => {
     fetchMeshMetrics();
-  }, []);
+  }, [token]);
 
   return (
     <div className="space-y-6">
@@ -72,7 +76,7 @@ export const MeshNetworkPage: React.FC = () => {
             Hardware & Simulation Disclosure
           </div>
           <p className="text-slate-400 leading-relaxed">
-            No physical LoRa transceiver hardware (e.g. SX1262, Heltec V3, T-Beam) is currently attached. The Phase 2 roadmap introduces an offline peer-to-peer virtual packet router allowing multiple local browser tabs or local network instances to simulate mesh packet relaying with realistic SNR, RSSI, and hop counts.
+            No physical LoRa transceiver hardware is currently attached. Radio configuration will be selected according to the applicable Indian regulatory requirements and the specific Meshtastic-compatible hardware used during the hardware integration phase. The Phase 2 roadmap introduces an offline peer-to-peer virtual packet router allowing multiple local browser tabs or local network instances to simulate mesh packet relaying with realistic SNR, RSSI, and hop counts.
           </p>
         </div>
       </div>

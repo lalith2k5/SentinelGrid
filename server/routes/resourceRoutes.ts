@@ -1,11 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { resourceService } from '../services/resourceService.ts';
-import { requireAuth } from '../middleware/authMiddleware.ts';
+import { requireAuth, requireRole } from '../middleware/authMiddleware.ts';
 import { ResourceAvailability, ResourceType } from '../db/schema.ts';
 
 const router = Router();
 
-// List resources with filters
+// List resources with filters - all authenticated roles can view resources
 router.get('/', requireAuth, (req: Request, res: Response) => {
   try {
     const { type, availability, search } = req.query;
@@ -22,8 +22,8 @@ router.get('/', requireAuth, (req: Request, res: Response) => {
   }
 });
 
-// Create new resource
-router.post('/', requireAuth, (req: Request, res: Response) => {
+// Create new resource - ADMIN and DISPATCHER only
+router.post('/', requireAuth, requireRole('ADMIN', 'DISPATCHER'), (req: Request, res: Response) => {
   try {
     const { name, type, location, capacity, statusDetails, availability } = req.body;
 
@@ -63,8 +63,8 @@ router.post('/', requireAuth, (req: Request, res: Response) => {
   }
 });
 
-// Update resource status/availability
-router.patch('/:id/status', requireAuth, (req: Request, res: Response) => {
+// Update resource status/availability - ADMIN and DISPATCHER only
+router.patch('/:id/status', requireAuth, requireRole('ADMIN', 'DISPATCHER'), (req: Request, res: Response) => {
   try {
     const { availability, statusDetails } = req.body;
 
@@ -95,8 +95,8 @@ router.patch('/:id/status', requireAuth, (req: Request, res: Response) => {
   }
 });
 
-// Populate demo resources
-router.post('/demo/populate', requireAuth, (req: Request, res: Response) => {
+// Populate demo resources - ADMIN only
+router.post('/demo/populate', requireAuth, requireRole('ADMIN'), (req: Request, res: Response) => {
   try {
     const created = resourceService.populateDemoData();
     return res.json({ message: 'Loaded clearly marked demo resources', count: created.length });
@@ -105,8 +105,8 @@ router.post('/demo/populate', requireAuth, (req: Request, res: Response) => {
   }
 });
 
-// Clear demo resources
-router.post('/demo/clear', requireAuth, (req: Request, res: Response) => {
+// Clear demo resources - ADMIN only
+router.post('/demo/clear', requireAuth, requireRole('ADMIN'), (req: Request, res: Response) => {
   try {
     resourceService.clearDemoData();
     return res.json({ message: 'Removed demo resources' });

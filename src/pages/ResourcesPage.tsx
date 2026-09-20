@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext.tsx';
 import {
   Truck,
   PlusCircle,
@@ -20,11 +21,15 @@ interface ResourcesPageProps {
 }
 
 export const ResourcesPage: React.FC<ResourcesPageProps> = ({ token, onOpenAddModal }) => {
+  const { user } = useAuth();
   const [resources, setResources] = useState<Resource[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selectedType, setSelectedType] = useState<string>('ALL');
   const [selectedAvailability, setSelectedAvailability] = useState<string>('ALL');
+
+  const canManageResources = user?.role === 'ADMIN' || user?.role === 'DISPATCHER';
+  const canManageDemo = user?.role === 'ADMIN';
 
   const fetchResources = async () => {
     try {
@@ -120,24 +125,26 @@ export const ResourcesPage: React.FC<ResourcesPageProps> = ({ token, onOpenAddMo
         </div>
 
         <div className="flex items-center flex-wrap gap-2">
-          {hasDemoItems ? (
-            <button
-              onClick={handleClearDemo}
-              type="button"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-950/60 hover:bg-red-900/80 text-red-300 border border-red-800 rounded text-xs font-mono transition-colors cursor-pointer"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>Clear Demo Resources</span>
-            </button>
-          ) : (
-            <button
-              onClick={handlePopulateDemo}
-              type="button"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 rounded text-xs font-mono transition-colors cursor-pointer"
-            >
-              <Database className="w-3.5 h-3.5" />
-              <span>Load Test Demo Units</span>
-            </button>
+          {canManageDemo && (
+            hasDemoItems ? (
+              <button
+                onClick={handleClearDemo}
+                type="button"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-950/60 hover:bg-red-900/80 text-red-300 border border-red-800 rounded text-xs font-mono transition-colors cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Clear Demo Resources</span>
+              </button>
+            ) : (
+              <button
+                onClick={handlePopulateDemo}
+                type="button"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 rounded text-xs font-mono transition-colors cursor-pointer"
+              >
+                <Database className="w-3.5 h-3.5" />
+                <span>Load Test Demo Units</span>
+              </button>
+            )
           )}
 
           <button
@@ -149,14 +156,16 @@ export const ResourcesPage: React.FC<ResourcesPageProps> = ({ token, onOpenAddMo
             <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
           </button>
 
-          <button
-            onClick={onOpenAddModal}
-            type="button"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-500 rounded text-xs font-semibold uppercase tracking-wider transition-colors cursor-pointer"
-          >
-            <PlusCircle className="w-3.5 h-3.5" />
-            <span>Add Resource</span>
-          </button>
+          {canManageResources && (
+            <button
+              onClick={onOpenAddModal}
+              type="button"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-500 rounded text-xs font-semibold uppercase tracking-wider transition-colors cursor-pointer"
+            >
+              <PlusCircle className="w-3.5 h-3.5" />
+              <span>Add Resource</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -294,16 +303,22 @@ export const ResourcesPage: React.FC<ResourcesPageProps> = ({ token, onOpenAddMo
                     </td>
 
                     <td className="py-3.5 px-4 whitespace-nowrap text-right">
-                      <select
-                        value={resource.availability}
-                        onChange={e => handleStatusChange(resource.id, e.target.value as ResourceAvailability)}
-                        className="bg-slate-950 border border-slate-800 text-slate-300 text-[11px] rounded px-2 py-1 focus:outline-hidden focus:border-emerald-500 cursor-pointer"
-                      >
-                        <option value="AVAILABLE">Available</option>
-                        <option value="DEPLOYED">Deployed</option>
-                        <option value="MAINTENANCE">Maintenance</option>
-                        <option value="OFFLINE">Offline</option>
-                      </select>
+                      {canManageResources ? (
+                        <select
+                          value={resource.availability}
+                          onChange={e => handleStatusChange(resource.id, e.target.value as ResourceAvailability)}
+                          className="bg-slate-950 border border-slate-800 text-slate-300 text-[11px] rounded px-2 py-1 focus:outline-hidden focus:border-emerald-500 cursor-pointer"
+                        >
+                          <option value="AVAILABLE">Available</option>
+                          <option value="DEPLOYED">Deployed</option>
+                          <option value="MAINTENANCE">Maintenance</option>
+                          <option value="OFFLINE">Offline</option>
+                        </select>
+                      ) : (
+                        <span className="text-slate-500 font-mono text-[11px] italic">
+                          Read-only
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))}

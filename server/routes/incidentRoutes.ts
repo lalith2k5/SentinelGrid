@@ -1,11 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { incidentService } from '../services/incidentService.ts';
-import { requireAuth } from '../middleware/authMiddleware.ts';
+import { requireAuth, requireRole } from '../middleware/authMiddleware.ts';
 import { IncidentSeverity, IncidentStatus, IncidentVerification } from '../db/schema.ts';
 
 const router = Router();
 
-// List incidents with filters
+// List incidents with filters - all authenticated roles can view incidents
 router.get('/', requireAuth, (req: Request, res: Response) => {
   try {
     const { status, severity, verificationStatus, search } = req.query;
@@ -23,7 +23,7 @@ router.get('/', requireAuth, (req: Request, res: Response) => {
   }
 });
 
-// Get incident by ID
+// Get incident by ID - all authenticated roles can view incident details
 router.get('/:id', requireAuth, (req: Request, res: Response) => {
   const incident = incidentService.getIncidentById(req.params.id);
   if (!incident) {
@@ -32,8 +32,8 @@ router.get('/:id', requireAuth, (req: Request, res: Response) => {
   return res.json({ incident });
 });
 
-// Create new incident
-router.post('/', requireAuth, (req: Request, res: Response) => {
+// Create new incident - ADMIN, DISPATCHER, OPERATOR can report/create incidents
+router.post('/', requireAuth, requireRole('ADMIN', 'DISPATCHER', 'OPERATOR'), (req: Request, res: Response) => {
   try {
     const { title, description, severity, locationAddress, zone, gridSquare, latitude, longitude } = req.body;
 
@@ -70,8 +70,8 @@ router.post('/', requireAuth, (req: Request, res: Response) => {
   }
 });
 
-// Update incident status
-router.patch('/:id/status', requireAuth, (req: Request, res: Response) => {
+// Update incident status - ADMIN, DISPATCHER, RESPONDER can update operational status (OPERATOR cannot)
+router.patch('/:id/status', requireAuth, requireRole('ADMIN', 'DISPATCHER', 'RESPONDER'), (req: Request, res: Response) => {
   try {
     const { status } = req.body;
     if (!status) {
@@ -100,8 +100,8 @@ router.patch('/:id/status', requireAuth, (req: Request, res: Response) => {
   }
 });
 
-// Populate demo incidents (clearly marked for test evaluation)
-router.post('/demo/populate', requireAuth, (req: Request, res: Response) => {
+// Populate demo incidents - Admin only
+router.post('/demo/populate', requireAuth, requireRole('ADMIN'), (req: Request, res: Response) => {
   try {
     const created = incidentService.populateDemoData();
     return res.json({ message: 'Loaded clearly marked demo incidents', count: created.length });
@@ -110,8 +110,8 @@ router.post('/demo/populate', requireAuth, (req: Request, res: Response) => {
   }
 });
 
-// Clear demo incidents
-router.post('/demo/clear', requireAuth, (req: Request, res: Response) => {
+// Clear demo incidents - Admin only
+router.post('/demo/clear', requireAuth, requireRole('ADMIN'), (req: Request, res: Response) => {
   try {
     incidentService.clearDemoData();
     return res.json({ message: 'Removed demo incidents' });

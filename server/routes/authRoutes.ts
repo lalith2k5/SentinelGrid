@@ -109,7 +109,7 @@ router.get('/users', requireAuth, requireRole('ADMIN'), (_req: Request, res: Res
   return res.json({ users });
 });
 
-// Admin-only: update user role
+// Admin-only: update user role (with last-admin protection)
 router.patch('/users/:id/role', requireAuth, requireRole('ADMIN'), (req: Request, res: Response) => {
   const { id } = req.params;
   const { role } = req.body;
@@ -119,23 +119,52 @@ router.patch('/users/:id/role', requireAuth, requireRole('ADMIN'), (req: Request
     return res.status(400).json({ error: `Invalid role. Allowed roles: ${validRoles.join(', ')}` });
   }
 
-  const updatedUser = db.updateUserRole(id, role);
-  if (!updatedUser) {
+  try {
+    const updatedUser = db.updateUserRole(id, role);
+
+    db.logAudit({
+      actorId: req.user!.userId,
+      actorEmail: req.user!.email,
+      actorRole: req.user!.role,
+      action: 'USER_ROLE_UPDATED',
+      entityType: 'User',
+      entityId: id,
+      details: `Updated role for ${updatedUser.name} (${updatedUser.email}) to ${role}`
+    });
+
+    const { passwordHash: _, salt: __, ...sanitized } = updatedUser;
+    return res.json({ user: sanitized });
+  } catch (err: any) {
+    const status = err.message === 'User not found' ? 404 : 400;
+    return res.status(status).json({ error: err.message || 'Failed to update user role' });
+  }
+});
+
+// Admin-only: delete user (with last-admin protection)
+router.delete('/users/:id', requireAuth, requireRole('ADMIN'), (req: Request, res: Response) => {
+  const { id } = req.params;
+  const targetUser = db.findUserById(id);
+  if (!targetUser) {
     return res.status(404).json({ error: 'User not found' });
   }
 
-  db.logAudit({
-    actorId: req.user!.userId,
-    actorEmail: req.user!.email,
-    actorRole: req.user!.role,
-    action: 'USER_ROLE_UPDATED',
-    entityType: 'User',
-    entityId: id,
-    details: `Updated role for ${updatedUser.name} (${updatedUser.email}) to ${role}`
-  });
+  try {
+    db.deleteUser(id);
 
-  const { passwordHash: _, salt: __, ...sanitized } = updatedUser;
-  return res.json({ user: sanitized });
+    db.logAudit({
+      actorId: req.user!.userId,
+      actorEmail: req.user!.email,
+      actorRole: req.user!.role,
+      action: 'USER_DELETED',
+      entityType: 'User',
+      entityId: id,
+      details: `Admin deleted user ${targetUser.name} (${targetUser.email})`
+    });
+
+    return res.json({ success: true, message: `User ${targetUser.name} removed successfully.` });
+  } catch (err: any) {
+    return res.status(400).json({ error: err.message || 'Failed to delete user' });
+  }
 });
 
 export default router;

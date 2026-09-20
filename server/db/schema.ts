@@ -15,6 +15,7 @@ export interface User {
   role: UserRole;
   badgeNumber?: string;
   department?: string;
+  disabled?: boolean;
   createdAt: string;
   updatedAt: string;
 }

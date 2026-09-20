@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext.tsx';
 import {
   AlertTriangle,
   Search,
@@ -21,12 +22,16 @@ interface IncidentsPageProps {
 }
 
 export const IncidentsPage: React.FC<IncidentsPageProps> = ({ token, onOpenReportModal }) => {
+  const { user } = useAuth();
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
   const [selectedSeverity, setSelectedSeverity] = useState<string>('ALL');
   const [selectedVerification, setSelectedVerification] = useState<string>('ALL');
+
+  const canUpdateStatus = user?.role === 'ADMIN' || user?.role === 'DISPATCHER' || user?.role === 'RESPONDER';
+  const canManageDemo = user?.role === 'ADMIN';
 
   const fetchIncidents = async () => {
     try {
@@ -128,25 +133,27 @@ export const IncidentsPage: React.FC<IncidentsPageProps> = ({ token, onOpenRepor
         </div>
 
         <div className="flex items-center flex-wrap gap-2">
-          {hasDemoItems ? (
-            <button
-              onClick={handleClearDemo}
-              type="button"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-950/60 hover:bg-red-900/80 text-red-300 border border-red-800 rounded text-xs font-mono transition-colors cursor-pointer"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>Clear Demo Data</span>
-            </button>
-          ) : (
-            <button
-              onClick={handlePopulateDemo}
-              type="button"
-              title="Populate test emergency records clearly labeled as [DEMO/TEST DATA]"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 rounded text-xs font-mono transition-colors cursor-pointer"
-            >
-              <Database className="w-3.5 h-3.5" />
-              <span>Load Test Demo Data</span>
-            </button>
+          {canManageDemo && (
+            hasDemoItems ? (
+              <button
+                onClick={handleClearDemo}
+                type="button"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-950/60 hover:bg-red-900/80 text-red-300 border border-red-800 rounded text-xs font-mono transition-colors cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Clear Demo Data</span>
+              </button>
+            ) : (
+              <button
+                onClick={handlePopulateDemo}
+                type="button"
+                title="Populate test emergency records clearly labeled as [DEMO/TEST DATA]"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 rounded text-xs font-mono transition-colors cursor-pointer"
+              >
+                <Database className="w-3.5 h-3.5" />
+                <span>Load Test Demo Data</span>
+              </button>
+            )
           )}
 
           <button
@@ -360,17 +367,23 @@ export const IncidentsPage: React.FC<IncidentsPageProps> = ({ token, onOpenRepor
                     </td>
 
                     <td className="py-3.5 px-4 whitespace-nowrap text-right">
-                      <select
-                        value={incident.status}
-                        onChange={e => handleStatusChange(incident.id, e.target.value as IncidentStatus)}
-                        className="bg-slate-950 border border-slate-800 text-slate-300 text-[11px] rounded px-2 py-1 focus:outline-hidden focus:border-emerald-500 cursor-pointer"
-                      >
-                        <option value="OPEN">Set Open</option>
-                        <option value="INVESTIGATING">Set Investigating</option>
-                        <option value="DISPATCHED">Set Dispatched</option>
-                        <option value="CONTAINED">Set Contained</option>
-                        <option value="RESOLVED">Set Resolved</option>
-                      </select>
+                      {canUpdateStatus ? (
+                        <select
+                          value={incident.status}
+                          onChange={e => handleStatusChange(incident.id, e.target.value as IncidentStatus)}
+                          className="bg-slate-950 border border-slate-800 text-slate-300 text-[11px] rounded px-2 py-1 focus:outline-hidden focus:border-emerald-500 cursor-pointer"
+                        >
+                          <option value="OPEN">Set Open</option>
+                          <option value="INVESTIGATING">Set Investigating</option>
+                          <option value="DISPATCHED">Set Dispatched</option>
+                          <option value="CONTAINED">Set Contained</option>
+                          <option value="RESOLVED">Set Resolved</option>
+                        </select>
+                      ) : (
+                        <span className="text-slate-500 font-mono text-[11px] italic">
+                          Read-only
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))}

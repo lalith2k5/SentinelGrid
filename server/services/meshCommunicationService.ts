@@ -13,7 +13,7 @@ export class MeshCommunicationService {
       isImplemented: false,
       statusText: 'Simulation not started — Coming in Phase 2',
       description: 'Simulated LoRa / Meshtastic mesh packet broadcast, hop counting, and decentralized emergency message routing.',
-      offlineCapability: 'Actual radio frequencies and regulatory profiles (e.g., US 915MHz, EU 868MHz) will be configured in Phase 2 according to regional deployment hardware. Operates with zero cell or cloud infrastructure.'
+      offlineCapability: 'Radio configuration will be selected according to the applicable Indian regulatory requirements and the specific Meshtastic-compatible hardware used during the hardware integration phase. Operates with zero cell or cloud infrastructure.'
     };
   }
 
@@ -29,7 +29,7 @@ export class MeshCommunicationService {
       averageHopCount: 0,
       packetDeliveryRate: '0.0%',
       isConfigured: false,
-      notice: 'Phase 1 foundation: No LoRa hardware is connected. Actual radio frequencies and regulatory profiles (e.g., US 915MHz, EU 868MHz) will be configured in Phase 2 according to regional deployment hardware.'
+      notice: 'Phase 1 foundation: No LoRa hardware is connected. Radio configuration will be selected according to the applicable Indian regulatory requirements and the specific Meshtastic-compatible hardware used during the hardware integration phase.'
     };
   }
 }

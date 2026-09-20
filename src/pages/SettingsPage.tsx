@@ -26,7 +26,9 @@ export const SettingsPage: React.FC = () => {
   const fetchStatus = async () => {
     try {
       setIsLoading(true);
-      const res = await fetch('/api/system/status');
+      const res = await fetch('/api/system/status', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
       if (res.ok) {
         const data = await res.json();
         setDbStatus(data);

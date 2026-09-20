@@ -1,6 +1,15 @@
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { DatabaseSchema, User, UserRole, Incident, Resource, AuditLog, IncidentLocation } from './schema.ts';
+
+/**
+ * Hash bearer tokens with SHA-256 for secure revoked token persistence.
+ * Raw bearer tokens are never persisted in the database.
+ */
+function hashToken(token: string): string {
+  return crypto.createHash('sha256').update(token.trim()).digest('hex');
+}
 
 const DATA_DIR = path.resolve(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'sentinelgrid.json');
@@ -237,11 +246,14 @@ class LocalDatabase {
     return nextSeq;
   }
 
-  // Token Revocation (Session Invalidation)
+  // Token Revocation (Cryptographic SHA-256 Hash Storage)
   public revokeToken(token: string): void {
+    if (!token || typeof token !== 'string') return;
     this.data.revokedTokens = this.data.revokedTokens || [];
-    if (!this.data.revokedTokens.includes(token)) {
-      this.data.revokedTokens.push(token);
+    // Always store SHA-256 hash of the bearer token, NEVER the raw token
+    const tokenHash = hashToken(token);
+    if (!this.data.revokedTokens.includes(tokenHash)) {
+      this.data.revokedTokens.push(tokenHash);
       if (this.data.revokedTokens.length > 5000) {
         this.data.revokedTokens = this.data.revokedTokens.slice(-5000);
       }
@@ -250,15 +262,69 @@ class LocalDatabase {
   }
 
   public isTokenRevoked(token: string): boolean {
+    if (!token || typeof token !== 'string') return true;
     this.data.revokedTokens = this.data.revokedTokens || [];
-    return this.data.revokedTokens.includes(token);
+    const tokenHash = hashToken(token);
+    return this.data.revokedTokens.includes(tokenHash) || this.data.revokedTokens.includes(token);
   }
 
-  // User Role Management
-  public updateUserRole(userId: string, role: UserRole): User | undefined {
+  public getRevokedTokens(): string[] {
+    return [...(this.data.revokedTokens || [])];
+  }
+
+  // User Role Management with Last-Admin Protection
+  public updateUserRole(userId: string, role: UserRole): User {
     const user = this.data.users.find(u => u.id === userId);
-    if (!user) return undefined;
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    // Enforce last administrator protection
+    if (user.role === 'ADMIN' && role !== 'ADMIN') {
+      const activeAdmins = this.data.users.filter(u => u.role === 'ADMIN' && !u.disabled && u.id !== userId);
+      if (activeAdmins.length === 0) {
+        throw new Error('At least one administrator account must remain.');
+      }
+    }
+
     user.role = role;
+    user.updatedAt = new Date().toISOString();
+    this.saveSync();
+    return user;
+  }
+
+  // Delete user with Last-Admin Protection
+  public deleteUser(userId: string): boolean {
+    const user = this.data.users.find(u => u.id === userId);
+    if (!user) return false;
+
+    if (user.role === 'ADMIN') {
+      const activeAdmins = this.data.users.filter(u => u.role === 'ADMIN' && !u.disabled && u.id !== userId);
+      if (activeAdmins.length === 0) {
+        throw new Error('At least one administrator account must remain.');
+      }
+    }
+
+    this.data.users = this.data.users.filter(u => u.id !== userId);
+    this.saveSync();
+    return true;
+  }
+
+  // Disable/enable user with Last-Admin Protection
+  public setUserDisabled(userId: string, disabled: boolean): User {
+    const user = this.data.users.find(u => u.id === userId);
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    if (user.role === 'ADMIN' && disabled) {
+      const activeAdmins = this.data.users.filter(u => u.role === 'ADMIN' && !u.disabled && u.id !== userId);
+      if (activeAdmins.length === 0) {
+        throw new Error('At least one administrator account must remain.');
+      }
+    }
+
+    user.disabled = disabled;
     user.updatedAt = new Date().toISOString();
     this.saveSync();
     return user;
