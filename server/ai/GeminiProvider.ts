@@ -8,6 +8,7 @@ import { AIProvider, AIProviderStatus, TriageInput, TriageResult } from './types
 export class GeminiProvider implements AIProvider {
   public id = 'gemini';
   public name = 'Google Gemini Cloud Provider';
+  public version = '1.0.0';
 
   public async isAvailable(): Promise<boolean> {
     return Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim().length > 0);
@@ -18,17 +19,19 @@ export class GeminiProvider implements AIProvider {
     return {
       providerId: this.id,
       displayName: this.name,
+      providerVersion: this.version,
       isConfigured: hasKey,
       statusMessage: hasKey
         ? 'API Key detected (Cloud connected)'
-        : 'Not configured (Phase 1 placeholder — optional cloud provider)',
+        : 'Not configured (Optional cloud provider)',
       requiresInternet: true,
       localCompatible: false,
+      isOffline: false,
       modelIdentifier: 'gemini-2.5-flash'
     };
   }
 
   public async triageIncident(_input: TriageInput): Promise<TriageResult> {
-    throw new Error('GeminiProvider triage is planned for Phase 3. Core Phase 1 is strictly offline foundation.');
+    throw new Error('GeminiProvider is disabled in Phase 3 offline-first mode.');
   }
 }

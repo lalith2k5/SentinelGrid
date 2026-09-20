@@ -6,6 +6,10 @@ import authRoutes from './server/routes/authRoutes.ts';
 import incidentRoutes from './server/routes/incidentRoutes.ts';
 import resourceRoutes from './server/routes/resourceRoutes.ts';
 import systemRoutes from './server/routes/systemRoutes.ts';
+import meshRoutes from './server/routes/meshRoutes.ts';
+import routingRoutes from './server/routes/routingRoutes.ts';
+import dispatchRoutes from './server/routes/dispatchRoutes.ts';
+import mapRoutes from './server/routes/mapRoutes.ts';
 
 const PORT = 3000;
 
@@ -34,6 +38,10 @@ async function startServer() {
   app.use('/api/incidents', incidentRoutes);
   app.use('/api/resources', resourceRoutes);
   app.use('/api/system', systemRoutes);
+  app.use('/api/mesh', meshRoutes);
+  app.use('/api/routing', routingRoutes);
+  app.use('/api/dispatches', dispatchRoutes);
+  app.use('/api/map', mapRoutes);
 
   // Vite integration
   if (process.env.NODE_ENV !== 'production') {

@@ -10,11 +10,19 @@ import {
   MapPin,
   ShieldAlert,
   Trash2,
-  Database
+  Database,
+  Radio,
+  Send,
+  CheckCircle2,
+  Brain,
+  ChevronDown,
+  ChevronUp,
+  Sparkles
 } from 'lucide-react';
 import { Incident, IncidentSeverity, IncidentStatus, IncidentVerification } from '../types/index.ts';
 import { StatusBadge } from '../components/common/StatusBadge.tsx';
 import { EmptyState } from '../components/common/EmptyState.tsx';
+import { TriagePanel } from '../components/incidents/TriagePanel.tsx';
 
 interface IncidentsPageProps {
   token: string | null;
@@ -29,9 +37,13 @@ export const IncidentsPage: React.FC<IncidentsPageProps> = ({ token, onOpenRepor
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
   const [selectedSeverity, setSelectedSeverity] = useState<string>('ALL');
   const [selectedVerification, setSelectedVerification] = useState<string>('ALL');
+  const [meshBroadcastStatus, setMeshBroadcastStatus] = useState<{ id: string; status: string; hops?: number } | null>(null);
+  const [expandedTriageId, setExpandedTriageId] = useState<string | null>(null);
 
   const canUpdateStatus = user?.role === 'ADMIN' || user?.role === 'DISPATCHER' || user?.role === 'RESPONDER';
   const canManageDemo = user?.role === 'ADMIN';
+  const canSimulate = user?.role === 'ADMIN' || user?.role === 'DISPATCHER';
+  const canRunTriage = user?.role === 'ADMIN' || user?.role === 'DISPATCHER' || user?.role === 'OPERATOR';
 
   const fetchIncidents = async () => {
     try {
@@ -109,6 +121,33 @@ export const IncidentsPage: React.FC<IncidentsPageProps> = ({ token, onOpenRepor
       }
     } catch (err) {
       console.error('Failed to update incident status', err);
+    }
+  };
+
+  const handleSendViaMesh = async (incident: Incident) => {
+    if (!canSimulate) return;
+    try {
+      setMeshBroadcastStatus({ id: incident.id, status: 'TRANSMITTING' });
+      const res = await fetch(`/api/mesh/simulate/incident/${incident.id}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMeshBroadcastStatus({
+          id: incident.id,
+          status: data.packet.status,
+          hops: data.packet.hopCount
+        });
+      } else {
+        setMeshBroadcastStatus({ id: incident.id, status: 'FAILED' });
+      }
+    } catch (err) {
+      console.error('Failed to broadcast via mesh', err);
+      setMeshBroadcastStatus({ id: incident.id, status: 'ERROR' });
     }
   };
 
@@ -290,103 +329,164 @@ export const IncidentsPage: React.FC<IncidentsPageProps> = ({ token, onOpenRepor
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/80">
-                {incidents.map(incident => (
-                  <tr key={incident.id} className="hover:bg-slate-800/40 transition-colors">
-                    <td className="py-3.5 px-4 font-mono font-bold text-slate-200 whitespace-nowrap">
-                      {incident.incidentNumber}
-                      {incident.isDemoData && (
-                        <span className="block text-[9px] font-mono text-amber-400 uppercase font-normal">
-                          [DEMO DATA]
-                        </span>
-                      )}
-                    </td>
-
-                    <td className="py-3.5 px-4 max-w-xs md:max-w-md">
-                      <div className="font-semibold text-slate-100 text-sm">{incident.title}</div>
-                      <p className="text-slate-400 text-xs mt-0.5 line-clamp-2">
-                        {incident.description}
-                      </p>
-                      {incident.reportedByName && (
-                        <span className="text-[10px] text-slate-500 font-mono mt-1 block">
-                          Reported by: {incident.reportedByName}
-                        </span>
-                      )}
-                    </td>
-
-                    <td className="py-3.5 px-4 whitespace-nowrap">
-                      <StatusBadge type="severity" value={incident.severity} />
-                    </td>
-
-                    <td className="py-3.5 px-4 whitespace-nowrap">
-                      <StatusBadge type="status" value={incident.status} />
-                    </td>
-
-                    <td className="py-3.5 px-4 whitespace-nowrap">
-                      <StatusBadge type="verification" value={incident.verificationStatus} />
-                    </td>
-
-                    <td className="py-3.5 px-4 whitespace-nowrap text-slate-300">
-                      {incident.location?.isUnavailable || (!incident.location?.address && incident.location?.latitude == null && incident.location?.longitude == null && !incident.location?.zone && !incident.location?.gridSquare) ? (
-                        <div className="flex items-center gap-1.5 text-slate-500 italic">
-                          <MapPin className="w-3.5 h-3.5 text-slate-600 shrink-0" />
-                          <span>Location unavailable</span>
-                        </div>
-                      ) : (
-                        <>
+                {incidents.map(incident => {
+                  const isExpanded = expandedTriageId === incident.id;
+                  return (
+                    <React.Fragment key={incident.id}>
+                      <tr className={`hover:bg-slate-800/40 transition-colors ${isExpanded ? 'bg-slate-800/30' : ''}`}>
+                        <td className="py-3.5 px-4 font-mono font-bold text-slate-200 whitespace-nowrap">
                           <div className="flex items-center gap-1.5">
-                            <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                            <span>
-                              {incident.location?.address || (incident.location?.latitude != null && incident.location?.longitude != null
-                                ? `${incident.location.latitude.toFixed(4)}°, ${incident.location.longitude.toFixed(4)}°`
-                                : 'Coordinates unassigned')}
+                            <button
+                              type="button"
+                              onClick={() => setExpandedTriageId(isExpanded ? null : incident.id)}
+                              className="text-slate-400 hover:text-emerald-400 p-0.5 rounded cursor-pointer"
+                              title={isExpanded ? 'Collapse AI Triage' : 'Expand AI Triage'}
+                            >
+                              {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                            </button>
+                            <span>{incident.incidentNumber}</span>
+                          </div>
+                          {incident.isDemoData && (
+                            <span className="block text-[9px] font-mono text-amber-400 uppercase font-normal ml-5">
+                              [DEMO DATA]
                             </span>
-                          </div>
-                          <div className="text-[10px] text-slate-500 font-mono mt-0.5">
-                            {[
-                              incident.location?.zone,
-                              incident.location?.gridSquare,
-                              incident.location?.latitude != null && incident.location?.longitude != null
-                                ? `${incident.location.latitude.toFixed(4)}°, ${incident.location.longitude.toFixed(4)}°`
-                                : null
-                            ]
-                              .filter(Boolean)
-                              .join(' • ') || 'Local sector unassigned'}
-                          </div>
-                        </>
-                      )}
-                    </td>
+                          )}
+                        </td>
 
-                    <td className="py-3.5 px-4 whitespace-nowrap text-slate-400 font-mono text-[11px]">
-                      <div className="flex items-center gap-1">
-                        <Clock className="w-3 h-3 text-slate-500" />
-                        <span>{new Date(incident.createdAt).toLocaleDateString()}</span>
-                      </div>
-                      <div className="text-slate-500 text-[10px]">
-                        {new Date(incident.createdAt).toLocaleTimeString()}
-                      </div>
-                    </td>
+                        <td className="py-3.5 px-4 max-w-xs md:max-w-md">
+                          <div className="font-semibold text-slate-100 text-sm">{incident.title}</div>
+                          <p className="text-slate-400 text-xs mt-0.5 line-clamp-2">
+                            {incident.description}
+                          </p>
+                          {incident.reportedByName && (
+                            <span className="text-[10px] text-slate-500 font-mono mt-1 block">
+                              Reported by: {incident.reportedByName}
+                            </span>
+                          )}
+                        </td>
 
-                    <td className="py-3.5 px-4 whitespace-nowrap text-right">
-                      {canUpdateStatus ? (
-                        <select
-                          value={incident.status}
-                          onChange={e => handleStatusChange(incident.id, e.target.value as IncidentStatus)}
-                          className="bg-slate-950 border border-slate-800 text-slate-300 text-[11px] rounded px-2 py-1 focus:outline-hidden focus:border-emerald-500 cursor-pointer"
-                        >
-                          <option value="OPEN">Set Open</option>
-                          <option value="INVESTIGATING">Set Investigating</option>
-                          <option value="DISPATCHED">Set Dispatched</option>
-                          <option value="CONTAINED">Set Contained</option>
-                          <option value="RESOLVED">Set Resolved</option>
-                        </select>
-                      ) : (
-                        <span className="text-slate-500 font-mono text-[11px] italic">
-                          Read-only
-                        </span>
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          <StatusBadge type="severity" value={incident.severity} />
+                        </td>
+
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          <StatusBadge type="status" value={incident.status} />
+                        </td>
+
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          <StatusBadge type="verification" value={incident.verificationStatus} />
+                        </td>
+
+                        <td className="py-3.5 px-4 whitespace-nowrap text-slate-300">
+                          {incident.location?.isUnavailable || (!incident.location?.address && incident.location?.latitude == null && incident.location?.longitude == null && !incident.location?.zone && !incident.location?.gridSquare) ? (
+                            <div className="flex items-center gap-1.5 text-slate-500 italic">
+                              <MapPin className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+                              <span>Location unavailable</span>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="flex items-center gap-1.5">
+                                <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                <span>
+                                  {incident.location?.address || (incident.location?.latitude != null && incident.location?.longitude != null
+                                    ? `${incident.location.latitude.toFixed(4)}°, ${incident.location.longitude.toFixed(4)}°`
+                                    : 'Coordinates unassigned')}
+                                </span>
+                              </div>
+                              <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+                                {[
+                                  incident.location?.zone,
+                                  incident.location?.gridSquare,
+                                  incident.location?.latitude != null && incident.location?.longitude != null
+                                    ? `${incident.location.latitude.toFixed(4)}°, ${incident.location.longitude.toFixed(4)}°`
+                                    : null
+                                ]
+                                  .filter(Boolean)
+                                  .join(' • ') || 'Local sector unassigned'}
+                              </div>
+                            </>
+                          )}
+                        </td>
+
+                        <td className="py-3.5 px-4 whitespace-nowrap text-slate-400 font-mono text-[11px]">
+                          <div className="flex items-center gap-1">
+                            <Clock className="w-3 h-3 text-slate-500" />
+                            <span>{new Date(incident.createdAt).toLocaleDateString()}</span>
+                          </div>
+                          <div className="text-slate-500 text-[10px]">
+                            {new Date(incident.createdAt).toLocaleTimeString()}
+                          </div>
+                        </td>
+
+                        <td className="py-3.5 px-4 whitespace-nowrap text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            {/* AI Triage Toggle Button */}
+                            <button
+                              type="button"
+                              onClick={() => setExpandedTriageId(isExpanded ? null : incident.id)}
+                              title="Inspect or Execute AI-Assisted Triage"
+                              className={`inline-flex items-center gap-1 px-2 py-1 border rounded text-[10px] font-mono transition-colors cursor-pointer ${
+                                isExpanded
+                                  ? 'bg-emerald-950/80 text-emerald-300 border-emerald-700'
+                                  : 'bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-emerald-300 border-slate-700'
+                              }`}
+                            >
+                              <Brain className="w-3 h-3 text-emerald-400" />
+                              <span>AI Triage</span>
+                            </button>
+
+                            {canSimulate && (
+                              <button
+                                type="button"
+                                onClick={() => handleSendViaMesh(incident)}
+                                title="Broadcast incident summary across offline mesh simulation"
+                                className="inline-flex items-center gap-1 px-2 py-1 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-emerald-300 border border-slate-700 rounded text-[10px] font-mono transition-colors cursor-pointer"
+                              >
+                                <Radio className="w-3 h-3 text-emerald-400" />
+                                <span>
+                                  {meshBroadcastStatus?.id === incident.id
+                                    ? meshBroadcastStatus.status
+                                    : 'Mesh Send'}
+                                </span>
+                              </button>
+                            )}
+
+                            {canUpdateStatus ? (
+                              <select
+                                value={incident.status}
+                                onChange={e => handleStatusChange(incident.id, e.target.value as IncidentStatus)}
+                                className="bg-slate-950 border border-slate-800 text-slate-300 text-[11px] rounded px-2 py-1 focus:outline-hidden focus:border-emerald-500 cursor-pointer"
+                              >
+                                <option value="OPEN">Set Open</option>
+                                <option value="INVESTIGATING">Set Investigating</option>
+                                <option value="DISPATCHED">Set Dispatched</option>
+                                <option value="CONTAINED">Set Contained</option>
+                                <option value="RESOLVED">Set Resolved</option>
+                              </select>
+                            ) : (
+                              <span className="text-slate-500 font-mono text-[11px] italic">
+                                Read-only
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+
+                      {/* Expandable AI Triage Panel Row */}
+                      {isExpanded && (
+                        <tr className="bg-slate-950/90 border-b border-slate-800">
+                          <td colSpan={8} className="p-4">
+                            <TriagePanel
+                              incident={incident}
+                              token={token}
+                              canRunTriage={canRunTriage}
+                            />
+                          </td>
+                        </tr>
                       )}
-                    </td>
-                  </tr>
-                ))}
+                    </React.Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>

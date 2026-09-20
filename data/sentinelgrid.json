@@ -1,15 +1,824 @@
 {
   "version": 1,
   "initializedAt": "2026-09-19T17:32:36.911Z",
-  "users": [],
+  "users": [
+    {
+      "id": "usr_1789867701191_n3toh",
+      "email": "operator@sentinelgrid.local",
+      "passwordHash": "b0f6fec90f959233643e6e63fc3d98bf34806e0990bd069bbd49ebb193bfca1a1dd69da21903ff651522cc60adec775174c3e91a4191b6449c24696151a76948",
+      "salt": "7bee30c73676abd3a5ef75622274ce4b",
+      "name": "Field Operator",
+      "role": "ADMIN",
+      "badgeNumber": "SG-001",
+      "department": "Emergency Operations Center",
+      "createdAt": "2026-09-20T01:28:21.191Z",
+      "updatedAt": "2026-09-20T01:28:21.191Z"
+    }
+  ],
   "incidents": [],
-  "incidentLocations": [],
-  "resources": [],
+  "incidentLocations": [
+    {
+      "id": "loc_1789870192144_3tq",
+      "incidentId": "inc_1789870192144_gs2gg",
+      "latitude": null,
+      "longitude": null,
+      "address": "Ridge Road Mile 14, Sector Bravo",
+      "zone": "North Zone",
+      "gridSquare": "GS-04",
+      "isUnavailable": false
+    },
+    {
+      "id": "loc_1789870192145_79d",
+      "incidentId": "inc_1789870192145_ocpwc",
+      "latitude": null,
+      "longitude": null,
+      "address": "Lower River Crossing, Route 9",
+      "zone": "West Sector",
+      "gridSquare": "GS-12",
+      "isUnavailable": false
+    },
+    {
+      "id": "loc_1789870194432_5jd",
+      "incidentId": "inc_1789870194432_63upk",
+      "latitude": null,
+      "longitude": null,
+      "address": "Ridge Road Mile 14, Sector Bravo",
+      "zone": "North Zone",
+      "gridSquare": "GS-04",
+      "isUnavailable": false
+    },
+    {
+      "id": "loc_1789870194433_xcu",
+      "incidentId": "inc_1789870194433_d7fsd",
+      "latitude": null,
+      "longitude": null,
+      "address": "Lower River Crossing, Route 9",
+      "zone": "West Sector",
+      "gridSquare": "GS-12",
+      "isUnavailable": false
+    }
+  ],
+  "resources": [
+    {
+      "id": "res_1789869361472_3wnxq",
+      "name": "Medic Unit Echo-1 [DEMO/TEST]",
+      "type": "AMBULANCE",
+      "availability": "AVAILABLE",
+      "location": "Staging Area Central, Sector 2",
+      "capacity": "2 Patients / Advanced Life Support",
+      "statusDetails": "Full medical inventory, 4x4 capable vehicle",
+      "isDemoData": true,
+      "createdAt": "2026-09-20T01:56:01.472Z",
+      "updatedAt": "2026-09-20T01:56:01.472Z"
+    },
+    {
+      "id": "res_1789869361473_ma0dd",
+      "name": "Mountain Search & Rescue Bravo [DEMO/TEST]",
+      "type": "RESCUE_TEAM",
+      "availability": "AVAILABLE",
+      "location": "Highlands Ranger Station",
+      "capacity": "6 Personnel / Canine unit included",
+      "statusDetails": "Equipped with rope rescue and thermal imaging gear",
+      "isDemoData": true,
+      "createdAt": "2026-09-20T01:56:01.473Z",
+      "updatedAt": "2026-09-20T01:56:01.473Z"
+    }
+  ],
   "responders": [],
   "messages": [],
   "meshNodes": [],
   "knowledgeDocuments": [],
-  "auditLogs": [],
-  "lastIncidentSequence": {},
-  "revokedTokens": []
+  "auditLogs": [
+    {
+      "actorId": "usr_1789867701191_n3toh",
+      "actorRole": "ADMIN",
+      "action": "HAZARD_CREATED",
+      "entityType": "GIS_HAZARD",
+      "entityId": "haz-1789871303757-9vg1e",
+      "details": "{\"type\":\"FLOOD\",\"severity\":\"HIGH\",\"lat\":10,\"lng\":10.01,\"radius\":300}",
+      "id": "audit_1789871303758_xcknx",
+      "timestamp": "2026-09-20T02:28:23.758Z"
+    },
+    {
+      "actorId": "usr_1789867701191_n3toh",
+      "actorRole": "ADMIN",
+      "action": "HAZARD_CREATED",
+      "entityType": "GIS_HAZARD",
+      "entityId": "haz-1789871229351-t1a2d",
+      "details": "{\"type\":\"FLOOD\",\"severity\":\"HIGH\",\"lat\":10,\"lng\":10.01,\"radius\":300}",
+      "id": "audit_1789871229352_n9ui7",
+      "timestamp": "2026-09-20T02:27:09.352Z"
+    },
+    {
+      "actorId": "usr_1789867701191_n3toh",
+      "actorRole": "ADMIN",
+      "action": "GIS_ROUTE_CALCULATED",
+      "entityType": "GIS_ROUTE",
+      "entityId": "route-1789871162615-e1xa5",
+      "details": "{\"status\":\"LOCATION_UNAVAILABLE\",\"mode\":\"FASTEST\",\"dist\":0,\"time\":0,\"incidentId\":null}",
+      "id": "audit_1789871162615_wciql",
+      "timestamp": "2026-09-20T02:26:02.615Z"
+    },
+    {
+      "actorId": "usr_1789867701191_n3toh",
+      "actorRole": "ADMIN",
+      "action": "GIS_ROUTE_CALCULATED",
+      "entityType": "GIS_ROUTE",
+      "entityId": "route-1789871155593-4pi78",
+      "details": "{\"status\":\"LOCATION_UNAVAILABLE\",\"mode\":\"BALANCED\",\"dist\":0,\"time\":0,\"incidentId\":null}",
+      "id": "audit_1789871155594_fvhm8",
+      "timestamp": "2026-09-20T02:25:55.594Z"
+    },
+    {
+      "actorId": "usr_1789867701191_n3toh",
+      "actorRole": "ADMIN",
+      "action": "GIS_ROUTE_CALCULATED",
+      "entityType": "GIS_ROUTE",
+      "entityId": "route-1789871146147-gmyv5",
+      "details": "{\"status\":\"LOCATION_UNAVAILABLE\",\"mode\":\"BALANCED\",\"dist\":0,\"time\":0,\"incidentId\":null}",
+      "id": "audit_1789871146148_7um63",
+      "timestamp": "2026-09-20T02:25:46.148Z"
+    },
+    {
+      "actorId": "usr_1789867701191_n3toh",
+      "actorRole": "ADMIN",
+      "action": "GIS_ROUTE_CALCULATED",
+      "entityType": "GIS_ROUTE",
+      "entityId": "route-1789871145109-sqxuw",
+      "details": "{\"status\":\"LOCATION_UNAVAILABLE\",\"mode\":\"BALANCED\",\"dist\":0,\"time\":0,\"incidentId\":null}",
+      "id": "audit_1789871145110_nbek3",
+      "timestamp": "2026-09-20T02:25:45.110Z"
+    },
+    {
+      "action": "INCIDENT_CREATED",
+      "entityType": "Incident",
+      "entityId": "inc_1789870194433_d7fsd",
+      "details": "Created incident INC-2026-0004: Bridge Structural Compromise [DEMO/TEST] [Severity: HIGH] Location: Lower River Crossing, Route 9",
+      "id": "audit_1789870194433_kc0lm",
+      "timestamp": "2026-09-20T02:09:54.433Z"
+    },
+    {
+      "action": "INCIDENT_CREATED",
+      "entityType": "Incident",
+      "entityId": "inc_1789870194432_63upk",
+      "details": "Created incident INC-2026-0003: Wildfire Spotting along Ridge Line [DEMO/TEST] [Severity: CRITICAL] Location: Ridge Road Mile 14, Sector Bravo",
+      "id": "audit_1789870194432_di22k",
+      "timestamp": "2026-09-20T02:09:54.432Z"
+    },
+    {
+      "action": "INCIDENT_CREATED",
+      "entityType": "Incident",
+      "entityId": "inc_1789870192145_ocpwc",
+      "details": "Created incident INC-2026-0002: Bridge Structural Compromise [DEMO/TEST] [Severity: HIGH] Location: Lower River Crossing, Route 9",
+      "id": "audit_1789870192146_3rrcc",
+      "timestamp": "2026-09-20T02:09:52.146Z"
+    },
+    {
+      "action": "INCIDENT_CREATED",
+      "entityType": "Incident",
+      "entityId": "inc_1789870192144_gs2gg",
+      "details": "Created incident INC-2026-0001: Wildfire Spotting along Ridge Line [DEMO/TEST] [Severity: CRITICAL] Location: Ridge Road Mile 14, Sector Bravo",
+      "id": "audit_1789870192144_lam0k",
+      "timestamp": "2026-09-20T02:09:52.144Z"
+    },
+    {
+      "actorId": "usr_1789867701191_n3toh",
+      "actorEmail": "operator@sentinelgrid.local",
+      "actorRole": "ADMIN",
+      "action": "USER_LOGIN",
+      "entityType": "User",
+      "entityId": "usr_1789867701191_n3toh",
+      "details": "User logged in successfully with role ADMIN",
+      "id": "audit_1789869762786_5xl4p",
+      "timestamp": "2026-09-20T02:02:42.786Z"
+    },
+    {
+      "actorId": "usr_1789867701191_n3toh",
+      "actorEmail": "operator@sentinelgrid.local",
+      "actorRole": "ADMIN",
+      "action": "USER_LOGOUT",
+      "entityType": "User",
+      "entityId": "usr_1789867701191_n3toh",
+      "details": "User logged out and session token was revoked",
+      "id": "audit_1789869526286_kv7u5",
+      "timestamp": "2026-09-20T01:58:46.286Z"
+    },
+    {
+      "action": "RESOURCE_REGISTERED",
+      "entityType": "Resource",
+      "entityId": "res_1789869361473_ma0dd",
+      "details": "Registered resource Mountain Search & Rescue Bravo [DEMO/TEST] (RESCUE_TEAM) - AVAILABLE",
+      "id": "audit_1789869361473_gl7gd",
+      "timestamp": "2026-09-20T01:56:01.473Z"
+    },
+    {
+      "action": "RESOURCE_REGISTERED",
+      "entityType": "Resource",
+      "entityId": "res_1789869361472_3wnxq",
+      "details": "Registered resource Medic Unit Echo-1 [DEMO/TEST] (AMBULANCE) - AVAILABLE",
+      "id": "audit_1789869361473_s8c31",
+      "timestamp": "2026-09-20T01:56:01.473Z"
+    },
+    {
+      "actorId": "usr_1789867701191_n3toh",
+      "actorEmail": "operator@sentinelgrid.local",
+      "actorRole": "ADMIN",
+      "action": "USER_REGISTERED",
+      "entityType": "User",
+      "entityId": "usr_1789867701191_n3toh",
+      "details": "Initial PRIMARY ADMIN account created for Field Operator",
+      "id": "audit_1789867701192_qpq7w",
+      "timestamp": "2026-09-20T01:28:21.192Z"
+    }
+  ],
+  "lastIncidentSequence": {
+    "2026": 4
+  },
+  "revokedTokens": [
+    "75514798052fc30a54aa742b3adcabeb3a4f1db0d55454d4a77ae222504eefc1"
+  ],
+  "simulatedNodes": [
+    {
+      "id": "COMMAND-01",
+      "nodeId": "COMMAND-01",
+      "nodeName": "Command Post Central",
+      "nodeType": "COMMAND",
+      "status": "OFFLINE",
+      "latitude": 28.6139,
+      "longitude": 77.209,
+      "batteryLevel": 100,
+      "signalQuality": 98,
+      "lastSeen": "2026-09-20T01:57:53.286Z",
+      "neighbors": [
+        "RELAY-01",
+        "RELAY-02"
+      ],
+      "createdAt": "2026-09-20T01:50:51.749Z",
+      "updatedAt": "2026-09-20T01:58:09.775Z"
+    },
+    {
+      "id": "RELAY-01",
+      "nodeId": "RELAY-01",
+      "nodeName": "Ridge Repeater 01",
+      "nodeType": "RELAY",
+      "status": "OFFLINE",
+      "latitude": 28.625,
+      "longitude": 77.218,
+      "batteryLevel": 94,
+      "signalQuality": 88,
+      "lastSeen": "2026-09-20T01:57:55.783Z",
+      "neighbors": [
+        "COMMAND-01",
+        "RELAY-02",
+        "FIELD-01"
+      ],
+      "createdAt": "2026-09-20T01:50:51.749Z",
+      "updatedAt": "2026-09-20T01:58:01.606Z"
+    },
+    {
+      "id": "RELAY-02",
+      "nodeId": "RELAY-02",
+      "nodeName": "Valley Repeater 02",
+      "nodeType": "RELAY",
+      "status": "OFFLINE",
+      "latitude": 28.602,
+      "longitude": 77.225,
+      "batteryLevel": 89,
+      "signalQuality": 82,
+      "lastSeen": "2026-09-20T01:50:51.749Z",
+      "neighbors": [
+        "COMMAND-01",
+        "RELAY-01",
+        "FIELD-02",
+        "RESPONDER-01"
+      ],
+      "createdAt": "2026-09-20T01:50:51.749Z",
+      "updatedAt": "2026-09-20T01:58:08.687Z"
+    },
+    {
+      "id": "FIELD-01",
+      "nodeId": "FIELD-01",
+      "nodeName": "Field Outpost Alpha",
+      "nodeType": "FIELD",
+      "status": "OFFLINE",
+      "latitude": 28.638,
+      "longitude": 77.231,
+      "batteryLevel": 78,
+      "signalQuality": 75,
+      "lastSeen": "2026-09-20T01:50:51.749Z",
+      "neighbors": [
+        "RELAY-01"
+      ],
+      "createdAt": "2026-09-20T01:50:51.749Z",
+      "updatedAt": "2026-09-20T01:58:03.544Z"
+    },
+    {
+      "id": "FIELD-02",
+      "nodeId": "FIELD-02",
+      "nodeName": "Community Beacon Beta",
+      "nodeType": "FIELD",
+      "status": "OFFLINE",
+      "latitude": 28.591,
+      "longitude": 77.24,
+      "batteryLevel": 82,
+      "signalQuality": 70,
+      "lastSeen": "2026-09-20T01:50:51.749Z",
+      "neighbors": [
+        "RELAY-02",
+        "RESPONDER-01"
+      ],
+      "createdAt": "2026-09-20T01:50:51.749Z",
+      "updatedAt": "2026-09-20T01:58:06.729Z"
+    },
+    {
+      "id": "RESPONDER-01",
+      "nodeId": "RESPONDER-01",
+      "nodeName": "Rescue Unit Mobile 4",
+      "nodeType": "RESPONDER",
+      "status": "OFFLINE",
+      "latitude": 28.599,
+      "longitude": 77.231,
+      "batteryLevel": 68,
+      "signalQuality": 84,
+      "lastSeen": "2026-09-20T01:50:51.749Z",
+      "neighbors": [
+        "RELAY-02",
+        "FIELD-02"
+      ],
+      "createdAt": "2026-09-20T01:50:51.749Z",
+      "updatedAt": "2026-09-20T01:58:04.779Z"
+    }
+  ],
+  "meshPackets": [
+    {
+      "packetId": "PKT-20260920-DE1835",
+      "messageType": "INCIDENT_REPORT",
+      "sourceNodeId": "FIELD-01",
+      "destinationNodeId": "COMMAND-01",
+      "createdAt": "2026-09-20T01:57:53.285Z",
+      "ttl": 5,
+      "initialTtl": 7,
+      "hopCount": 2,
+      "payload": {
+        "title": "INCIDENT_REPORT Broadcast",
+        "summary": "Simulated INCIDENT_REPORT dispatched via virtual mesh routing."
+      },
+      "status": "ACKNOWLEDGED",
+      "path": [
+        "FIELD-01",
+        "RELAY-01",
+        "COMMAND-01"
+      ],
+      "duplicateCount": 0,
+      "ackRequested": true,
+      "ackReceived": true,
+      "firstSentAt": "2026-09-20T01:57:53.285Z",
+      "deliveredAt": "2026-09-20T01:57:53.286Z",
+      "latencyMs": 306,
+      "ackPacketId": "PKT-20260920-EF6E2A",
+      "acknowledgedAt": "2026-09-20T01:57:53.287Z",
+      "totalLatencyMs": 611
+    },
+    {
+      "packetId": "PKT-20260920-100539",
+      "messageType": "INCIDENT_REPORT",
+      "sourceNodeId": "FIELD-01",
+      "destinationNodeId": "COMMAND-01",
+      "createdAt": "2026-09-20T01:57:55.783Z",
+      "ttl": 5,
+      "initialTtl": 7,
+      "hopCount": 2,
+      "payload": {
+        "title": "INCIDENT_REPORT Broadcast",
+        "summary": "Simulated INCIDENT_REPORT dispatched via virtual mesh routing."
+      },
+      "status": "DROPPED",
+      "path": [
+        "FIELD-01",
+        "RELAY-01"
+      ],
+      "duplicateCount": 0,
+      "ackRequested": true,
+      "ackReceived": false,
+      "firstSentAt": "2026-09-20T01:57:55.783Z",
+      "lossSimulated": true,
+      "dropReason": "SIMULATED_PACKET_LOSS"
+    },
+    {
+      "packetId": "PKT-20260920-8972A6",
+      "messageType": "INCIDENT_REPORT",
+      "sourceNodeId": "FIELD-01",
+      "destinationNodeId": "COMMAND-01",
+      "createdAt": "2026-09-20T01:58:14.538Z",
+      "ttl": 7,
+      "initialTtl": 7,
+      "hopCount": 0,
+      "payload": {
+        "title": "INCIDENT_REPORT Broadcast",
+        "summary": "Simulated INCIDENT_REPORT dispatched via virtual mesh routing."
+      },
+      "status": "DROPPED",
+      "path": [
+        "FIELD-01"
+      ],
+      "duplicateCount": 0,
+      "ackRequested": true,
+      "ackReceived": false,
+      "firstSentAt": "2026-09-20T01:58:14.538Z",
+      "dropReason": "NODE_OFFLINE"
+    },
+    {
+      "packetId": "PKT-20260920-9DDC49",
+      "messageType": "INCIDENT_REPORT",
+      "sourceNodeId": "FIELD-01",
+      "destinationNodeId": "COMMAND-01",
+      "createdAt": "2026-09-20T01:58:21.375Z",
+      "ttl": 7,
+      "initialTtl": 7,
+      "hopCount": 0,
+      "payload": {
+        "title": "INCIDENT_REPORT Broadcast",
+        "summary": "Simulated INCIDENT_REPORT dispatched via virtual mesh routing."
+      },
+      "status": "DROPPED",
+      "path": [
+        "FIELD-01"
+      ],
+      "duplicateCount": 0,
+      "ackRequested": true,
+      "ackReceived": false,
+      "firstSentAt": "2026-09-20T01:58:21.375Z",
+      "dropReason": "NODE_OFFLINE"
+    },
+    {
+      "packetId": "PKT-20260920-59BEF0",
+      "messageType": "INCIDENT_REPORT",
+      "sourceNodeId": "FIELD-01",
+      "destinationNodeId": "COMMAND-01",
+      "createdAt": "2026-09-20T01:58:26.179Z",
+      "ttl": 7,
+      "initialTtl": 7,
+      "hopCount": 0,
+      "payload": {
+        "title": "INCIDENT_REPORT Broadcast",
+        "summary": "Simulated INCIDENT_REPORT dispatched via virtual mesh routing."
+      },
+      "status": "DROPPED",
+      "path": [
+        "FIELD-01"
+      ],
+      "duplicateCount": 0,
+      "ackRequested": true,
+      "ackReceived": false,
+      "firstSentAt": "2026-09-20T01:58:26.179Z",
+      "dropReason": "NODE_OFFLINE"
+    }
+  ],
+  "meshEvents": [
+    {
+      "packetId": "PKT-20260920-59BEF0",
+      "nodeId": "FIELD-01",
+      "eventType": "NODE_OFFLINE",
+      "message": "Transmission aborted: Source node FIELD-01 is OFFLINE",
+      "details": {
+        "sourceNodeId": "FIELD-01"
+      },
+      "eventId": "EVT-1789869506180-SZAM",
+      "timestamp": "2026-09-20T01:58:26.180Z"
+    },
+    {
+      "packetId": "PKT-20260920-59BEF0",
+      "nodeId": "FIELD-01",
+      "eventType": "PACKET_CREATED",
+      "message": "Packet PKT-20260920-59BEF0 initialized at node FIELD-01 (TTL: 7, Max Hops: 15)",
+      "details": {
+        "initialTtl": 7,
+        "maxHops": 15,
+        "ackRequested": true,
+        "destination": "COMMAND-01"
+      },
+      "eventId": "EVT-1789869506179-0CWV",
+      "timestamp": "2026-09-20T01:58:26.179Z"
+    },
+    {
+      "packetId": "PKT-20260920-9DDC49",
+      "nodeId": "FIELD-01",
+      "eventType": "NODE_OFFLINE",
+      "message": "Transmission aborted: Source node FIELD-01 is OFFLINE",
+      "details": {
+        "sourceNodeId": "FIELD-01"
+      },
+      "eventId": "EVT-1789869501376-DX4M",
+      "timestamp": "2026-09-20T01:58:21.376Z"
+    },
+    {
+      "packetId": "PKT-20260920-9DDC49",
+      "nodeId": "FIELD-01",
+      "eventType": "PACKET_CREATED",
+      "message": "Packet PKT-20260920-9DDC49 initialized at node FIELD-01 (TTL: 7, Max Hops: 15)",
+      "details": {
+        "initialTtl": 7,
+        "maxHops": 15,
+        "ackRequested": true,
+        "destination": "COMMAND-01"
+      },
+      "eventId": "EVT-1789869501375-8MUK",
+      "timestamp": "2026-09-20T01:58:21.375Z"
+    },
+    {
+      "packetId": "PKT-20260920-8972A6",
+      "nodeId": "FIELD-01",
+      "eventType": "NODE_OFFLINE",
+      "message": "Transmission aborted: Source node FIELD-01 is OFFLINE",
+      "details": {
+        "sourceNodeId": "FIELD-01"
+      },
+      "eventId": "EVT-1789869494539-82HD",
+      "timestamp": "2026-09-20T01:58:14.539Z"
+    },
+    {
+      "packetId": "PKT-20260920-8972A6",
+      "nodeId": "FIELD-01",
+      "eventType": "PACKET_CREATED",
+      "message": "Packet PKT-20260920-8972A6 initialized at node FIELD-01 (TTL: 7, Max Hops: 15)",
+      "details": {
+        "initialTtl": 7,
+        "maxHops": 15,
+        "ackRequested": true,
+        "destination": "COMMAND-01"
+      },
+      "eventId": "EVT-1789869494538-7F3Y",
+      "timestamp": "2026-09-20T01:58:14.538Z"
+    },
+    {
+      "packetId": "PKT-20260920-100539",
+      "nodeId": "COMMAND-01",
+      "eventType": "PACKET_DROPPED",
+      "message": "Simulated RF packet loss occurred during relay to node COMMAND-01",
+      "details": {
+        "hop": 2,
+        "lossRate": 0.05
+      },
+      "eventId": "EVT-1789869475784-Y3LP",
+      "timestamp": "2026-09-20T01:57:55.784Z"
+    },
+    {
+      "packetId": "PKT-20260920-100539",
+      "nodeId": "RELAY-01",
+      "eventType": "PACKET_FORWARDED",
+      "message": "Packet PKT-20260920-100539 forwarded by RELAY-01 -> COMMAND-01 (Hop 1, Delay 141ms)",
+      "details": {
+        "hop": 1,
+        "delayMs": 141,
+        "remainingTtl": 6
+      },
+      "eventId": "EVT-1789869475784-DD87",
+      "timestamp": "2026-09-20T01:57:55.784Z"
+    },
+    {
+      "packetId": "PKT-20260920-100539",
+      "nodeId": "FIELD-01",
+      "eventType": "PACKET_CREATED",
+      "message": "Packet PKT-20260920-100539 initialized at node FIELD-01 (TTL: 7, Max Hops: 15)",
+      "details": {
+        "initialTtl": 7,
+        "maxHops": 15,
+        "ackRequested": true,
+        "destination": "COMMAND-01"
+      },
+      "eventId": "EVT-1789869475783-C6GV",
+      "timestamp": "2026-09-20T01:57:55.783Z"
+    },
+    {
+      "packetId": "PKT-20260920-DE1835",
+      "nodeId": "FIELD-01",
+      "eventType": "ACK_RECEIVED",
+      "message": "ACK PKT-20260920-EF6E2A received at source FIELD-01. Roundtrip latency: 611ms",
+      "details": {
+        "ackPacketId": "PKT-20260920-EF6E2A",
+        "originalPacketId": "PKT-20260920-DE1835",
+        "roundtripLatencyMs": 611
+      },
+      "eventId": "EVT-1789869473287-IUMN",
+      "timestamp": "2026-09-20T01:57:53.287Z"
+    },
+    {
+      "packetId": "PKT-20260920-DE1835",
+      "nodeId": "RELAY-01",
+      "eventType": "ACK_FORWARDED",
+      "message": "ACK PKT-20260920-EF6E2A forwarded by RELAY-01 -> FIELD-01",
+      "details": {
+        "ackPacketId": "PKT-20260920-EF6E2A",
+        "hop": 1,
+        "delayMs": 128
+      },
+      "eventId": "EVT-1789869473287-THJP",
+      "timestamp": "2026-09-20T01:57:53.287Z"
+    },
+    {
+      "packetId": "PKT-20260920-DE1835",
+      "nodeId": "COMMAND-01",
+      "eventType": "ACK_CREATED",
+      "message": "ACK packet PKT-20260920-EF6E2A created for original packet PKT-20260920-DE1835",
+      "details": {
+        "ackPacketId": "PKT-20260920-EF6E2A",
+        "originalPacketId": "PKT-20260920-DE1835"
+      },
+      "eventId": "EVT-1789869473286-ZKBB",
+      "timestamp": "2026-09-20T01:57:53.286Z"
+    },
+    {
+      "packetId": "PKT-20260920-DE1835",
+      "nodeId": "COMMAND-01",
+      "eventType": "PACKET_DELIVERED",
+      "message": "Packet PKT-20260920-DE1835 delivered to destination COMMAND-01 in 2 hops (306ms total latency)",
+      "details": {
+        "hopCount": 2,
+        "latencyMs": 306
+      },
+      "eventId": "EVT-1789869473286-DTKY",
+      "timestamp": "2026-09-20T01:57:53.286Z"
+    },
+    {
+      "packetId": "PKT-20260920-DE1835",
+      "nodeId": "RELAY-01",
+      "eventType": "PACKET_FORWARDED",
+      "message": "Packet PKT-20260920-DE1835 forwarded by RELAY-01 -> COMMAND-01 (Hop 1, Delay 194ms)",
+      "details": {
+        "hop": 1,
+        "delayMs": 194,
+        "remainingTtl": 6
+      },
+      "eventId": "EVT-1789869473286-Q05H",
+      "timestamp": "2026-09-20T01:57:53.286Z"
+    },
+    {
+      "packetId": "PKT-20260920-DE1835",
+      "nodeId": "FIELD-01",
+      "eventType": "PACKET_CREATED",
+      "message": "Packet PKT-20260920-DE1835 initialized at node FIELD-01 (TTL: 7, Max Hops: 15)",
+      "details": {
+        "initialTtl": 7,
+        "maxHops": 15,
+        "ackRequested": true,
+        "destination": "COMMAND-01"
+      },
+      "eventId": "EVT-1789869473285-ARRT",
+      "timestamp": "2026-09-20T01:57:53.285Z"
+    }
+  ],
+  "meshConfig": {
+    "packetLossRate": 0.05,
+    "ackPacketLossRate": 0,
+    "minimumLatencyMs": 80,
+    "maximumLatencyMs": 240,
+    "initialTtl": 7,
+    "maxHops": 15,
+    "autoAck": true,
+    "deterministicMode": false
+  },
+  "aiTriageRecords": [],
+  "hazards": [
+    {
+      "hazardId": "haz-1789871229351-t1a2d",
+      "type": "FLOOD",
+      "severity": "HIGH",
+      "latitude": 10,
+      "longitude": 10.01,
+      "radiusMeters": 300,
+      "active": true,
+      "source": "User (Field Operator)",
+      "createdAt": "2026-09-20T02:27:09.351Z",
+      "expiresAt": null,
+      "description": ""
+    },
+    {
+      "hazardId": "haz-1789871303757-9vg1e",
+      "type": "FLOOD",
+      "severity": "HIGH",
+      "latitude": 10,
+      "longitude": 10.01,
+      "radiusMeters": 300,
+      "active": true,
+      "source": "User (Field Operator)",
+      "createdAt": "2026-09-20T02:28:23.757Z",
+      "expiresAt": null,
+      "description": ""
+    }
+  ],
+  "blockedRoads": [],
+  "routeHistory": [
+    {
+      "routeId": "route-1789871162615-e1xa5",
+      "incidentId": null,
+      "origin": {
+        "latitude": 0,
+        "longitude": 0,
+        "name": "UNAVAILABLE"
+      },
+      "destination": {
+        "latitude": 0,
+        "longitude": 0,
+        "name": "UNAVAILABLE"
+      },
+      "nodePath": [],
+      "edgePath": [],
+      "distanceMeters": 0,
+      "estimatedTravelSeconds": 0,
+      "hazardPenalty": 0,
+      "totalCost": 0,
+      "avoidedHazards": 0,
+      "blockedEdgesAvoided": 0,
+      "calculatedAt": "2026-09-20T02:26:02.615Z",
+      "algorithm": "Dijkstra-Offline-v1",
+      "mapDatasetVersion": "1.0.0",
+      "mode": "FASTEST",
+      "routeStatus": "LOCATION_UNAVAILABLE",
+      "explanation": "Origin location could not be matched to the local road network."
+    },
+    {
+      "routeId": "route-1789871155593-4pi78",
+      "incidentId": null,
+      "origin": {
+        "latitude": 0,
+        "longitude": 0,
+        "name": "UNAVAILABLE"
+      },
+      "destination": {
+        "latitude": 0,
+        "longitude": 0,
+        "name": "UNAVAILABLE"
+      },
+      "nodePath": [],
+      "edgePath": [],
+      "distanceMeters": 0,
+      "estimatedTravelSeconds": 0,
+      "hazardPenalty": 0,
+      "totalCost": 0,
+      "avoidedHazards": 0,
+      "blockedEdgesAvoided": 0,
+      "calculatedAt": "2026-09-20T02:25:55.593Z",
+      "algorithm": "Dijkstra-Offline-v1",
+      "mapDatasetVersion": "1.0.0",
+      "mode": "BALANCED",
+      "routeStatus": "LOCATION_UNAVAILABLE",
+      "explanation": "Origin location could not be matched to the local road network."
+    },
+    {
+      "routeId": "route-1789871146147-gmyv5",
+      "incidentId": null,
+      "origin": {
+        "latitude": 0,
+        "longitude": 0,
+        "name": "UNAVAILABLE"
+      },
+      "destination": {
+        "latitude": 0,
+        "longitude": 0,
+        "name": "UNAVAILABLE"
+      },
+      "nodePath": [],
+      "edgePath": [],
+      "distanceMeters": 0,
+      "estimatedTravelSeconds": 0,
+      "hazardPenalty": 0,
+      "totalCost": 0,
+      "avoidedHazards": 0,
+      "blockedEdgesAvoided": 0,
+      "calculatedAt": "2026-09-20T02:25:46.147Z",
+      "algorithm": "Dijkstra-Offline-v1",
+      "mapDatasetVersion": "1.0.0",
+      "mode": "BALANCED",
+      "routeStatus": "LOCATION_UNAVAILABLE",
+      "explanation": "Origin location could not be matched to the local road network."
+    },
+    {
+      "routeId": "route-1789871145109-sqxuw",
+      "incidentId": null,
+      "origin": {
+        "latitude": 0,
+        "longitude": 0,
+        "name": "UNAVAILABLE"
+      },
+      "destination": {
+        "latitude": 0,
+        "longitude": 0,
+        "name": "UNAVAILABLE"
+      },
+      "nodePath": [],
+      "edgePath": [],
+      "distanceMeters": 0,
+      "estimatedTravelSeconds": 0,
+      "hazardPenalty": 0,
+      "totalCost": 0,
+      "avoidedHazards": 0,
+      "blockedEdgesAvoided": 0,
+      "calculatedAt": "2026-09-20T02:25:45.109Z",
+      "algorithm": "Dijkstra-Offline-v1",
+      "mapDatasetVersion": "1.0.0",
+      "mode": "BALANCED",
+      "routeStatus": "LOCATION_UNAVAILABLE",
+      "explanation": "Origin location could not be matched to the local road network."
+    }
+  ]
 }

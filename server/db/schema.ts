@@ -55,22 +55,134 @@ export interface Incident {
   updatedAt: string;
 }
 
-export type ResourceType = 'AMBULANCE' | 'RESCUE_TEAM' | 'MEDICAL_TEAM' | 'SHELTER' | 'EMERGENCY_EQUIPMENT';
-export type ResourceAvailability = 'AVAILABLE' | 'DEPLOYED' | 'MAINTENANCE' | 'OFFLINE';
+export type ResourceType = 
+  | 'AMBULANCE' 
+  | 'MEDICAL_TEAM' 
+  | 'FIRE_UNIT' 
+  | 'RESCUE_TEAM' 
+  | 'HAZMAT_UNIT' 
+  | 'SEARCH_TEAM' 
+  | 'EVACUATION_UNIT' 
+  | 'SHELTER' 
+  | 'SUPPLY_UNIT' 
+  | 'EMERGENCY_EQUIPMENT' 
+  | 'OTHER';
+
+export type ResourceStatus = 'AVAILABLE' | 'ASSIGNED' | 'EN_ROUTE' | 'ON_SCENE' | 'UNAVAILABLE';
+
+export type ResourceCapability = 
+  | 'MEDICAL' 
+  | 'FIRE' 
+  | 'RESCUE' 
+  | 'HAZMAT' 
+  | 'SEARCH' 
+  | 'EVACUATION' 
+  | 'SHELTER' 
+  | 'SUPPLIES' 
+  | 'OTHER';
+
+export type ResourceAvailability = 'AVAILABLE' | 'DEPLOYED' | 'MAINTENANCE' | 'OFFLINE' | ResourceStatus;
 
 export interface Resource {
   id: string;
+  resourceCode?: string;
   name: string;
   type: ResourceType;
+  capabilities?: ResourceCapability[];
+  status?: ResourceStatus;
   availability: ResourceAvailability;
+  latitude?: number | null;
+  longitude?: number | null;
   location: string;
-  capacity?: string;
+  capacity?: string | null;
+  patientCapacity?: number | null;
+  criticalCareCapacity?: number | null;
+  teamSize?: number | null;
+  occupantCapacity?: number | null;
+  supplyCapacity?: number | null;
   statusDetails?: string;
-  assignedIncidentId?: string;
-  assignedIncidentNumber?: string;
+  currentIncidentId?: string | null;
+  assignedIncidentId?: string | null;
+  assignedIncidentNumber?: string | null;
+  metadata?: Record<string, any>;
   isDemoData?: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export type RouteFeasibility = 
+  | 'REACHABLE' 
+  | 'REACHABLE_WITH_HAZARD_WARNING' 
+  | 'NO_SAFE_ROUTE' 
+  | 'LOCATION_UNAVAILABLE' 
+  | 'OUTSIDE_OFFLINE_MAP';
+
+export interface MatchingFactors {
+  capabilityScore: number;
+  availabilityScore: number;
+  distanceScore: number;
+  routeSafetyScore: number;
+  severityFitScore: number;
+  hazardCompatibilityScore: number;
+  capacityScore: number;
+}
+
+export interface ResourceMatchRecommendation {
+  resourceId: string;
+  resourceCode: string;
+  name: string;
+  type: ResourceType;
+  status: ResourceStatus;
+  capabilities: ResourceCapability[];
+  latitude: number | null;
+  longitude: number | null;
+  location?: string;
+  capacity?: string | null;
+  patientCapacity?: number | null;
+  criticalCareCapacity?: number | null;
+  teamSize?: number | null;
+  occupantCapacity?: number | null;
+  supplyCapacity?: number | null;
+  capacityStatus?: 'SUFFICIENT' | 'PARTIAL' | 'INSUFFICIENT' | 'NOT_EVALUATED';
+  capacityReason?: string;
+  currentIncidentId?: string | null;
+  
+  matchScore: number;
+  recommendedMatch: boolean;
+  matchingFactors: MatchingFactors;
+  factors?: MatchingFactors;
+  
+  straightLineDistanceKm: number | null;
+  routeFeasibility: RouteFeasibility;
+  routeInfo?: {
+    routeStatus: string;
+    distanceMeters: number;
+    travelTimeSeconds: number;
+    hazardPenalty: number;
+    avoidedHazards: number;
+    blockedEdgesAvoided: number;
+    explanation: string;
+  } | null;
+  
+  reasons: string[];
+  warnings: string[];
+}
+
+export interface IncidentResourceMatchingResult {
+  incidentId: string;
+  incidentNumber: string;
+  incidentTitle: string;
+  requiredCapabilities: ResourceCapability[];
+  extractedRequirements: {
+    category?: string;
+    severity?: string;
+    urgency?: string;
+    hazards?: string[];
+    estimatedVictimCount?: number | null;
+    hasLocation: boolean;
+  };
+  matches: ResourceMatchRecommendation[];
+  evaluatedAt: string;
 }
 
 export type ResponderStatus = 'STANDBY' | 'DISPATCHED' | 'EN_ROUTE' | 'ON_SCENE' | 'OFF_DUTY';
@@ -108,6 +220,146 @@ export interface Message {
 export type MeshHardwareType = 'LORA_V3' | 'T_BEAM' | 'HELTEC' | 'SIMULATED';
 export type MeshNodeRole = 'ROUTER' | 'CLIENT' | 'REPEATER';
 export type MeshNodeStatus = 'ONLINE' | 'OFFLINE' | 'DEGRADED';
+
+export type NodeType = 'COMMAND' | 'RELAY' | 'RESPONDER' | 'FIELD';
+export type NodeOperationalStatus = 'ONLINE' | 'OFFLINE';
+
+export interface SimulatedMeshNode {
+  id: string;
+  nodeId: string;
+  nodeName: string;
+  nodeType: NodeType;
+  status: NodeOperationalStatus;
+  latitude: number | null;
+  longitude: number | null;
+  batteryLevel: number;
+  signalQuality: number;
+  lastSeen: string;
+  neighbors: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type MeshPacketType = 
+  | 'INCIDENT_REPORT' 
+  | 'STATUS_UPDATE' 
+  | 'RESOURCE_REQUEST' 
+  | 'EMERGENCY_BROADCAST' 
+  | 'EMERGENCY_ALERT'
+  | 'TELEMETRY_PING'
+  | 'ACK';
+
+export type MeshPacketStatus = 
+  | 'QUEUED'
+  | 'IN_TRANSIT'
+  | 'DELIVERED'
+  | 'ACKNOWLEDGED'
+  | 'TTL_EXPIRED'
+  | 'MAX_HOPS_EXCEEDED'
+  | 'DROPPED'
+  | 'DUPLICATE_DROPPED';
+
+export interface MeshPacketPayload {
+  incidentId?: string;
+  incidentNumber?: string;
+  title?: string;
+  severity?: IncidentSeverity;
+  category?: string;
+  victimCount?: number;
+  hazardInfo?: string;
+  locationText?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  summary?: string;
+  rawText?: string;
+  message?: string;
+  item?: string;
+  [key: string]: any;
+}
+
+export interface SimulatedMeshPacket {
+  packetId: string;
+  messageType: MeshPacketType;
+  sourceNodeId: string;
+  destinationNodeId: string;
+  incidentId?: string;
+  incidentNumber?: string;
+  createdAt: string;
+  ttl: number;
+  initialTtl: number;
+  hopCount: number;
+  payload: MeshPacketPayload;
+  status: MeshPacketStatus;
+  path: string[];
+  duplicateCount: number;
+  ackRequested: boolean;
+  ackReceived: boolean;
+  ackPacketId?: string;
+  firstSentAt?: string;
+  deliveredAt?: string;
+  acknowledgedAt?: string;
+  latencyMs?: number;
+  totalLatencyMs?: number;
+  lossSimulated?: boolean;
+  dropReason?: string;
+}
+
+export type MeshEventType = 
+  | 'PACKET_CREATED'
+  | 'PACKET_RECEIVED'
+  | 'PACKET_FORWARDED'
+  | 'PACKET_DROPPED'
+  | 'DUPLICATE_DROPPED'
+  | 'TTL_EXPIRED'
+  | 'MAX_HOPS_EXCEEDED'
+  | 'PACKET_DELIVERED'
+  | 'ACK_CREATED'
+  | 'ACK_FORWARDED'
+  | 'ACK_RECEIVED'
+  | 'ACK_FAILED'
+  | 'ACK_LOST'
+  | 'NODE_OFFLINE';
+
+export interface SimulatedMeshEvent {
+  eventId: string;
+  timestamp: string;
+  packetId: string;
+  nodeId: string;
+  eventType: MeshEventType;
+  message: string;
+  details?: Record<string, any>;
+}
+
+export interface MeshSimulationConfig {
+  packetLossRate: number;
+  ackPacketLossRate?: number;
+  minimumLatencyMs: number;
+  maximumLatencyMs: number;
+  initialTtl: number;
+  maxHops: number;
+  autoAck: boolean;
+  deterministicMode?: boolean;
+}
+
+export interface MeshMetricsData {
+  meshStatus: string;
+  isSimulation: true;
+  totalTransmitted: number;
+  totalDelivered: number;
+  totalAcknowledged: number;
+  totalDropped: number;
+  totalDuplicates: number;
+  totalEvents: number;
+  packetDeliveryRate: string;
+  packetLossRate: string;
+  averageHopCount: string;
+  averageLatencyMs: string;
+  duplicateRate: string;
+  ackSuccessRate: string;
+  activeNodeCount: number;
+  totalNodeCount: number;
+  notice: string;
+}
 
 export interface MeshNode {
   id: string;
@@ -151,6 +403,117 @@ export interface AuditLog {
   timestamp: string;
 }
 
+// Phase 3: Local AI Triage Types
+export type TriageCategory = 
+  | 'MEDICAL'
+  | 'FIRE'
+  | 'FLOOD'
+  | 'EARTHQUAKE'
+  | 'LANDSLIDE'
+  | 'ROAD_ACCIDENT'
+  | 'STRUCTURAL_COLLAPSE'
+  | 'HAZMAT'
+  | 'MISSING_PERSON'
+  | 'SECURITY'
+  | 'OTHER'
+  | 'UNKNOWN';
+
+export type TriageSeverity = 'P1' | 'P2' | 'P3' | 'P4' | 'UNKNOWN';
+
+export type TriageUrgency = 'IMMEDIATE' | 'URGENT' | 'SOON' | 'ROUTINE' | 'UNKNOWN';
+
+export interface AIIncidentTriageInput {
+  incidentId?: string;
+  incidentNumber?: string;
+  title: string;
+  description: string;
+  reportedVictimCount?: number | null;
+  verifiedVictimCount?: number | null;
+  hazards?: string[];
+  locationAddress?: string;
+  landmark?: string;
+  zone?: string;
+  gridSquare?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  status?: string;
+}
+
+export interface AIIncidentTriageRecord {
+  id: string;
+  incidentId: string;
+  incidentNumber?: string;
+  category: TriageCategory;
+  severity: TriageSeverity;
+  estimatedVictimCount: number | null;
+  verifiedVictimCount: number | null;
+  hazards: string[];
+  symptomsOrConditions: string[];
+  urgency: TriageUrgency;
+  locationClues: string[];
+  confidence: number;
+  requiresHumanReview: boolean;
+  reasoningSummary: string;
+  provider: string;
+  providerVersion: string;
+  sourceTextHash: string;
+  createdAt: string;
+  requestedByUserId?: string;
+  requestedByName?: string;
+}
+
+export type DispatchStatus = 
+  | 'PENDING'
+  | 'DISPATCHED'
+  | 'ACKNOWLEDGED'
+  | 'EN_ROUTE'
+  | 'ARRIVED'
+  | 'ON_SCENE'
+  | 'COMPLETED'
+  | 'DECLINED'
+  | 'CANCELLED';
+
+export interface DispatchReassignment {
+  previousResourceId: string;
+  newResourceId: string;
+  reassignedBy: string;
+  reassignedAt: string;
+  reason: string;
+}
+
+export interface Dispatch {
+  dispatchId: string;
+  incidentId: string;
+  resourceId: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  status: DispatchStatus;
+  priority: string;
+  routeInfo: any;
+  dispatchNotes: string;
+  acknowledgementTimestamp?: string | null;
+  enRouteTimestamp?: string | null;
+  arrivedTimestamp?: string | null;
+  onSceneTimestamp?: string | null;
+  completedTimestamp?: string | null;
+  cancelledTimestamp?: string | null;
+  cancellationReason?: string | null;
+  declinedTimestamp?: string | null;
+  declineReason?: string | null;
+  reassignmentHistory?: DispatchReassignment[];
+  verifiedVictimCount?: number | null;
+  completionNotes?: string | null;
+  auditInfo?: {
+    createdActorId: string;
+    createdActorRole: string;
+    updatedActorId?: string;
+    updatedActorRole?: string;
+  };
+}
+
+import { Hazard, BlockedRoad, RouteResult } from '../gis/types.ts';
+
 export interface DatabaseSchema {
   version: number;
   initializedAt: string;
@@ -159,10 +522,19 @@ export interface DatabaseSchema {
   incidentLocations: IncidentLocation[];
   resources: Resource[];
   responders: Responder[];
+  dispatches?: Dispatch[];
   messages: Message[];
   meshNodes: MeshNode[];
+  simulatedNodes?: SimulatedMeshNode[];
+  meshPackets?: SimulatedMeshPacket[];
+  meshEvents?: SimulatedMeshEvent[];
+  meshConfig?: MeshSimulationConfig;
   knowledgeDocuments: KnowledgeDocument[];
   auditLogs: AuditLog[];
+  aiTriageRecords?: AIIncidentTriageRecord[];
   lastIncidentSequence?: Record<string, number>;
   revokedTokens?: string[];
+  hazards?: Hazard[];
+  blockedRoads?: BlockedRoad[];
+  routeHistory?: RouteResult[];
 }

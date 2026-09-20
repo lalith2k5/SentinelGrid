@@ -1,6 +1,6 @@
 {
   "name": "SentinelGrid",
-  "description": "Offline-first emergency response and coordination platform foundation",
+  "description": "Offline-first emergency response and mesh network coordination simulation platform",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -49,9 +49,9 @@ export class SystemStatusService {
       {
         id: 'mesh_simulator',
         name: 'Mesh Simulator',
-        state: 'SIMULATION_NOT_STARTED',
-        stateLabel: 'Simulation not started',
-        badgeType: 'warning',
+        state: 'OPERATIONAL',
+        stateLabel: 'Operational (Virtual Mesh Simulation)',
+        badgeType: 'success',
         phase: 2,
         details: meshMetrics.notice,
         offlineCapable: true
@@ -59,9 +59,9 @@ export class SystemStatusService {
       {
         id: 'ai_engine',
         name: 'AI Engine',
-        state: 'NOT_CONFIGURED',
-        stateLabel: 'Not configured (Phase 3)',
-        badgeType: 'neutral',
+        state: 'OPERATIONAL',
+        stateLabel: 'Operational (Local Heuristic Engine 1.0)',
+        badgeType: 'success',
         phase: 3,
         details: aiStatus.providerStatus.statusMessage,
         offlineCapable: true
@@ -78,11 +78,11 @@ export class SystemStatusService {
       },
       {
         id: 'map_system',
-        name: 'Map System',
-        state: 'NOT_CONFIGURED',
-        stateLabel: 'Not configured (Phase 7)',
-        badgeType: 'neutral',
-        phase: 7,
+        name: 'Offline GIS & Routing',
+        state: 'OPERATIONAL',
+        stateLabel: 'Operational (Phase 4)',
+        badgeType: 'success',
+        phase: 4,
         details: routingService.getInfo().statusText,
         offlineCapable: true
       }
@@ -108,7 +108,7 @@ export class SystemStatusService {
       counts: {
         activeIncidents: db.getIncidents().filter(i => i.status === 'OPEN' || i.status === 'INVESTIGATING' || i.status === 'DISPATCHED').length,
         criticalIncidents: db.getIncidents().filter(i => i.severity === 'CRITICAL' && i.status !== 'RESOLVED').length,
-        connectedMeshNodes: 0,
+        connectedMeshNodes: db.getSimulatedNodes().filter(n => n.status === 'ONLINE').length,
         availableResponders: db.getStatus().counts.responders,
         availableResources: db.getResources().filter(r => r.availability === 'AVAILABLE').length,
         pendingDispatches: 0

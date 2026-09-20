@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { incidentService } from '../services/incidentService.ts';
+import { triageService } from '../services/triageService.ts';
 import { requireAuth, requireRole } from '../middleware/authMiddleware.ts';
 import { IncidentSeverity, IncidentStatus, IncidentVerification } from '../db/schema.ts';
 
@@ -117,6 +118,67 @@ router.post('/demo/clear', requireAuth, requireRole('ADMIN'), (req: Request, res
     return res.json({ message: 'Removed demo incidents' });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
+  }
+});
+
+// Phase 3: AI-Assisted Incident Triage Endpoints
+
+// POST /api/incidents/:id/triage — Run / Re-run AI triage on an incident
+// Roles: ADMIN, DISPATCHER, OPERATOR
+router.post('/:id/triage', requireAuth, requireRole('ADMIN', 'DISPATCHER', 'OPERATOR'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    if (!id || typeof id !== 'string' || !id.trim()) {
+      return res.status(400).json({ error: 'Valid incident ID is required.' });
+    }
+
+    const triageRecord = await triageService.runTriage(id, {
+      userId: req.user?.userId,
+      name: req.user?.name,
+      role: req.user?.role
+    });
+
+    return res.status(200).json({
+      triage: triageRecord,
+      message: 'AI-assisted triage completed successfully (Advisory only).'
+    });
+  } catch (err: any) {
+    if (err.message && err.message.includes('not found')) {
+      return res.status(404).json({ error: err.message });
+    }
+    return res.status(500).json({ error: err.message || 'Failed to execute AI triage.' });
+  }
+});
+
+// GET /api/incidents/:id/triage — Get latest AI triage record for an incident
+// Roles: All authenticated roles
+router.get('/:id/triage', requireAuth, (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    if (!id || typeof id !== 'string' || !id.trim()) {
+      return res.status(400).json({ error: 'Valid incident ID is required.' });
+    }
+
+    const latest = triageService.getLatestTriage(id);
+    return res.status(200).json({ triage: latest });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Failed to retrieve triage record.' });
+  }
+});
+
+// GET /api/incidents/:id/triage/history — Get full historical triage records for an incident
+// Roles: All authenticated roles
+router.get('/:id/triage/history', requireAuth, (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    if (!id || typeof id !== 'string' || !id.trim()) {
+      return res.status(400).json({ error: 'Valid incident ID is required.' });
+    }
+
+    const history = triageService.getTriageHistory(id);
+    return res.status(200).json({ history, total: history.length });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Failed to retrieve triage history.' });
   }
 });
 

@@ -1,0 +1,816 @@
+import { MapNode, MapEdge, MapMetadata, Hazard, BlockedRoad } from './types.ts';
+
+export const SYNTHETIC_MAP_METADATA: MapMetadata = {
+  datasetName: 'SYNTHETIC OFFLINE TRAINING / DEMONSTRATION MAP',
+  version: '2.0.0',
+  nodeCount: 25,
+  edgeCount: 35,
+  isSyntheticDemo: true,
+  boundingBox: {
+    minLat: 9.9700,
+    maxLat: 10.0600,
+    minLng: 9.9700,
+    maxLng: 10.0600
+  },
+  lastUpdated: '2026-09-20T00:00:00.000Z'
+};
+
+export const SYNTHETIC_MAP_NODES: MapNode[] = [
+  // Preserved Phase 4 Base Nodes (N-01 to N-11)
+  {
+    nodeId: 'N-01',
+    name: 'Sector Alpha HQ',
+    type: 'JUNCTION',
+    latitude: 10.0000,
+    longitude: 10.0000
+  },
+  {
+    nodeId: 'N-02',
+    name: 'North Junction',
+    type: 'INTERSECTION',
+    latitude: 10.0100,
+    longitude: 10.0000
+  },
+  {
+    nodeId: 'N-03',
+    name: 'West Bridge Passage',
+    type: 'BRIDGE',
+    latitude: 10.0000,
+    longitude: 9.9900
+  },
+  {
+    nodeId: 'N-04',
+    name: 'East Highway Interchange',
+    type: 'JUNCTION',
+    latitude: 10.0000,
+    longitude: 10.0100
+  },
+  {
+    nodeId: 'N-05',
+    name: 'South Checkpoint',
+    type: 'CHECKPOINT',
+    latitude: 9.9900,
+    longitude: 10.0000
+  },
+  {
+    nodeId: 'N-06',
+    name: 'Metro General Hospital',
+    type: 'HOSPITAL',
+    latitude: 10.0100,
+    longitude: 10.0100
+  },
+  {
+    nodeId: 'N-07',
+    name: 'Civic Shelter One',
+    type: 'SHELTER',
+    latitude: 10.0100,
+    longitude: 9.9900
+  },
+  {
+    nodeId: 'N-08',
+    name: 'River Tunnel Pass',
+    type: 'TUNNEL',
+    latitude: 9.9900,
+    longitude: 9.9900
+  },
+  {
+    nodeId: 'N-09',
+    name: 'Industrial Way Depot',
+    type: 'ROAD',
+    latitude: 9.9900,
+    longitude: 10.0100
+  },
+  {
+    nodeId: 'N-10',
+    name: 'North One-Way Access',
+    type: 'ROAD',
+    latitude: 10.0200,
+    longitude: 10.0000
+  },
+  {
+    nodeId: 'N-11',
+    name: 'Isolated Outpost',
+    type: 'OTHER',
+    latitude: 10.0500,
+    longitude: 10.0500
+  },
+  // Phase 7 Extended Nodes (N-12 to N-25)
+  {
+    nodeId: 'N-12',
+    name: 'Service Depot Central',
+    type: 'ROAD',
+    latitude: 10.0200,
+    longitude: 10.0100
+  },
+  {
+    nodeId: 'N-13',
+    name: 'Emergency Staging North',
+    type: 'CHECKPOINT',
+    latitude: 10.0300,
+    longitude: 10.0000
+  },
+  {
+    nodeId: 'N-14',
+    name: 'Community Center Shelter',
+    type: 'SHELTER',
+    latitude: 10.0300,
+    longitude: 9.9900
+  },
+  {
+    nodeId: 'N-15',
+    name: 'East Access Interchange',
+    type: 'JUNCTION',
+    latitude: 10.0200,
+    longitude: 10.0200
+  },
+  {
+    nodeId: 'N-16',
+    name: 'Southwest Evac Station',
+    type: 'CHECKPOINT',
+    latitude: 9.9800,
+    longitude: 9.9800
+  },
+  {
+    nodeId: 'N-17',
+    name: 'South Logistics Hub',
+    type: 'ROAD',
+    latitude: 9.9800,
+    longitude: 10.0000
+  },
+  {
+    nodeId: 'N-18',
+    name: 'West Perimeter Junction',
+    type: 'INTERSECTION',
+    latitude: 10.0000,
+    longitude: 9.9800
+  },
+  {
+    nodeId: 'N-19',
+    name: 'Northwest Transit Hub',
+    type: 'JUNCTION',
+    latitude: 10.0200,
+    longitude: 9.9800
+  },
+  {
+    nodeId: 'N-20',
+    name: 'Auxiliary Aid Clinic',
+    type: 'HOSPITAL',
+    latitude: 10.0000,
+    longitude: 10.0200
+  },
+  {
+    nodeId: 'N-21',
+    name: 'Flood Gate Control Alpha',
+    type: 'CHECKPOINT',
+    latitude: 10.0100,
+    longitude: 9.9800
+  },
+  {
+    nodeId: 'N-22',
+    name: 'Industrial Perimeter East',
+    type: 'ROAD',
+    latitude: 9.9900,
+    longitude: 10.0200
+  },
+  {
+    nodeId: 'N-23',
+    name: 'North River Crossing',
+    type: 'BRIDGE',
+    latitude: 10.0400,
+    longitude: 10.0100
+  },
+  {
+    nodeId: 'N-24',
+    name: 'Underground Tunnel West',
+    type: 'TUNNEL',
+    latitude: 9.9900,
+    longitude: 9.9800
+  },
+  {
+    nodeId: 'N-25',
+    name: 'Secondary Reserve Outpost',
+    type: 'OTHER',
+    latitude: 9.9800,
+    longitude: 10.0100
+  }
+];
+
+export const SYNTHETIC_MAP_EDGES: MapEdge[] = [
+  // Preserved Phase 4 Base Edges (E-01 to E-15)
+  {
+    edgeId: 'E-01',
+    fromNodeId: 'N-01',
+    toNodeId: 'N-02',
+    distanceMeters: 1110,
+    estimatedTravelSeconds: 90,
+    estimatedTravelTimeSeconds: 90,
+    roadType: 'PRIMARY',
+    direction: 'BIDIRECTIONAL',
+    isBlocked: false,
+    hazardPenalty: 0,
+    maxSafeSpeed: 50,
+    roadName: 'ROAD-001',
+    capacity: 'FOUR_LANE'
+  },
+  {
+    edgeId: 'E-02',
+    fromNodeId: 'N-01',
+    toNodeId: 'N-03',
+    distanceMeters: 1110,
+    estimatedTravelSeconds: 100,
+    estimatedTravelTimeSeconds: 100,
+    roadType: 'BRIDGE',
+    direction: 'BIDIRECTIONAL',
+    isBlocked: false,
+    hazardPenalty: 0,
+    maxSafeSpeed: 40,
+    roadName: 'ROAD-002',
+    capacity: 'TWO_LANE'
+  },
+  {
+    edgeId: 'E-03',
+    fromNodeId: 'N-01',
+    toNodeId: 'N-04',
+    distanceMeters: 1110,
+    estimatedTravelSeconds: 90,
+    estimatedTravelTimeSeconds: 90,
+    roadType: 'SECONDARY',
+    direction: 'BIDIRECTIONAL',
+    isBlocked: false,
+    hazardPenalty: 0,
+    maxSafeSpeed: 50,
+    roadName: 'ROAD-003',
+    capacity: 'TWO_LANE'
+  },
+  {
+    edgeId: 'E-04',
+    fromNodeId: 'N-01',
+    toNodeId: 'N-05',
+    distanceMeters: 1110,
+    estimatedTravelSeconds: 120,
+    estimatedTravelTimeSeconds: 120,
+    roadType: 'LOCAL',
+    direction: 'BIDIRECTIONAL',
+    isBlocked: false,
+    hazardPenalty: 0,
+    maxSafeSpeed: 30,
+    roadName: 'ROAD-004',
+    capacity: 'TWO_LANE'
+  },
+  {
+    edgeId: 'E-05',
+    fromNodeId: 'N-02',
+    toNodeId: 'N-06',
+    distanceMeters: 1110,
+    estimatedTravelSeconds: 80,
+    estimatedTravelTimeSeconds: 80,
+    roadType: 'SECONDARY',
+    direction: 'BIDIRECTIONAL',
+    isBlocked: false,
+    hazardPenalty: 0,
+    maxSafeSpeed: 50,
+    roadName: 'ROAD-005',
+    capacity: 'TWO_LANE'
+  },
+  {
+    edgeId: 'E-06',
+    fromNodeId: 'N-04',
+    toNodeId: 'N-06',
+    distanceMeters: 1110,
+    estimatedTravelSeconds: 60,
+    estimatedTravelTimeSeconds: 60,
+    roadType: 'HIGHWAY',
+    direction: 'BIDIRECTIONAL',
+    isBlocked: false,
+    hazardPenalty: 0,
+    maxSafeSpeed: 80,
+    roadName: 'ROAD-006',
+    capacity: 'FOUR_LANE'
+  },
+  {
+    edgeId: 'E-07',
+    fromNodeId: 'N-02',
+    toNodeId: 'N-07',
+    distanceMeters: 1110,
+    estimatedTravelSeconds: 100,
+    estimatedTravelTimeSeconds: 100,
+    roadType: 'LOCAL',
+    direction: 'BIDIRECTIONAL',
+    isBlocked: false,
+    hazardPenalty: 0,
+    maxSafeSpeed: 40,
+    roadName: 'ROAD-007',
+    capacity: 'TWO_LANE'
+  },
+  {
+    edgeId: 'E-08',
+    fromNodeId: 'N-03',
+    toNodeId: 'N-07',
+    distanceMeters: 1110,
+    estimatedTravelSeconds: 110,
+    estimatedTravelTimeSeconds: 110,
+    roadType: 'LOCAL',
+    direction: 'BIDIRECTIONAL',
+    isBlocked: false,
+    hazardPenalty: 0,
+    maxSafeSpeed: 40,
+    roadName: 'ROAD-008',
+    capacity: 'TWO_LANE'
+  },
+  {
+    edgeId: 'E-09',
+    fromNodeId: 'N-03',
+    toNodeId: 'N-08',
+    distanceMeters: 1110,
+    estimatedTravelSeconds: 120,
+    estimatedTravelTimeSeconds: 120,
+    roadType: 'TUNNEL',
+    direction: 'BIDIRECTIONAL',
+    isBlocked: false,
+    hazardPenalty: 0,
+    maxSafeSpeed: 30,
+    roadName: 'ROAD-009',
+    capacity: 'TWO_LANE'
+  },
+  {
+    edgeId: 'E-10',
+    fromNodeId: 'N-05',
+    toNodeId: 'N-08',
+    distanceMeters: 1110,
+    estimatedTravelSeconds: 100,
+    estimatedTravelTimeSeconds: 100,
+    roadType: 'LOCAL',
+    direction: 'BIDIRECTIONAL',
+    isBlocked: false,
+    hazardPenalty: 0,
+    maxSafeSpeed: 40,
+    roadName: 'ROAD-010',
+    capacity: 'TWO_LANE'
+  },
+  {
+    edgeId: 'E-11',
+    fromNodeId: 'N-04',
+    toNodeId: 'N-09',
+    distanceMeters: 1110,
+    estimatedTravelSeconds: 90,
+    estimatedTravelTimeSeconds: 90,
+    roadType: 'LOCAL',
+    direction: 'BIDIRECTIONAL',
+    isBlocked: false,
+    hazardPenalty: 0,
+    maxSafeSpeed: 40,
+    roadName: 'ROAD-011',
+    capacity: 'TWO_LANE'
+  },
+  {
+    edgeId: 'E-12',
+    fromNodeId: 'N-05',
+    toNodeId: 'N-09',
+    distanceMeters: 1110,
+    estimatedTravelSeconds: 150,
+    estimatedTravelTimeSeconds: 150,
+    roadType: 'UNPAVED',
+    direction: 'BIDIRECTIONAL',
+    isBlocked: false,
+    hazardPenalty: 0,
+    maxSafeSpeed: 25,
+    roadName: 'ROAD-012',
+    capacity: 'SINGLE_LANE'
+  },
+  {
+    edgeId: 'E-13',
+    fromNodeId: 'N-02',
+    toNodeId: 'N-10',
+    distanceMeters: 1110,
+    estimatedTravelSeconds: 80,
+    estimatedTravelTimeSeconds: 80,
+    roadType: 'LOCAL',
+    direction: 'ONE_WAY',
+    isBlocked: false,
+    hazardPenalty: 0,
+    maxSafeSpeed: 40,
+    roadName: 'ROAD-013',
+    capacity: 'SINGLE_LANE'
+  },
+  {
+    edgeId: 'E-14',
+    fromNodeId: 'N-10',
+    toNodeId: 'N-06',
+    distanceMeters: 1110,
+    estimatedTravelSeconds: 80,
+    estimatedTravelTimeSeconds: 80,
+    roadType: 'LOCAL',
+    direction: 'ONE_WAY',
+    isBlocked: false,
+    hazardPenalty: 0,
+    maxSafeSpeed: 40,
+    roadName: 'ROAD-014',
+    capacity: 'SINGLE_LANE'
+  },
+  {
+    edgeId: 'E-15',
+    fromNodeId: 'N-06',
+    toNodeId: 'N-11',
+    distanceMeters: 5550,
+    estimatedTravelSeconds: 600,
+    estimatedTravelTimeSeconds: 600,
+    roadType: 'UNPAVED',
+    direction: 'BIDIRECTIONAL',
+    isBlocked: false,
+    hazardPenalty: 0,
+    maxSafeSpeed: 30,
+    roadName: 'ROAD-015',
+    capacity: 'SINGLE_LANE'
+  },
+  // Phase 7 Extended Edges (E-16 to E-35)
+  {
+    edgeId: 'E-16',
+    fromNodeId: 'N-10',
+    toNodeId: 'N-12',
+    distanceMeters: 1110,
+    estimatedTravelSeconds: 90,
+    estimatedTravelTimeSeconds: 90,
+    roadType: 'PRIMARY',
+    direction: 'BIDIRECTIONAL',
+    isBlocked: false,
+    hazardPenalty: 0,
+    maxSafeSpeed: 50,
+    roadName: 'ROAD-016',
+    capacity: 'FOUR_LANE'
+  },
+  {
+    edgeId: 'E-17',
+    fromNodeId: 'N-12',
+    toNodeId: 'N-13',
+    distanceMeters: 1570,
+    estimatedTravelSeconds: 110,
+    estimatedTravelTimeSeconds: 110,
+    roadType: 'SECONDARY',
+    direction: 'BIDIRECTIONAL',
+    isBlocked: false,
+    hazardPenalty: 0,
+    maxSafeSpeed: 50,
+    roadName: 'ROAD-017',
+    capacity: 'TWO_LANE'
+  },
+  {
+    edgeId: 'E-18',
+    fromNodeId: 'N-13',
+    toNodeId: 'N-14',
+    distanceMeters: 1110,
+    estimatedTravelSeconds: 95,
+    estimatedTravelTimeSeconds: 95,
+    roadType: 'LOCAL',
+    direction: 'BIDIRECTIONAL',
+    isBlocked: false,
+    hazardPenalty: 0,
+    maxSafeSpeed: 40,
+    roadName: 'ROAD-018',
+    capacity: 'TWO_LANE'
+  },
+  {
+    edgeId: 'E-19',
+    fromNodeId: 'N-14',
+    toNodeId: 'N-07',
+    distanceMeters: 2220,
+    estimatedTravelSeconds: 180,
+    estimatedTravelTimeSeconds: 180,
+    roadType: 'SECONDARY',
+    direction: 'BIDIRECTIONAL',
+    isBlocked: false,
+    hazardPenalty: 0,
+    maxSafeSpeed: 50,
+    roadName: 'ROAD-019',
+    capacity: 'TWO_LANE'
+  },
+  {
+    edgeId: 'E-20',
+    fromNodeId: 'N-06',
+    toNodeId: 'N-15',
+    distanceMeters: 1570,
+    estimatedTravelSeconds: 80,
+    estimatedTravelTimeSeconds: 80,
+    roadType: 'HIGHWAY',
+    direction: 'BIDIRECTIONAL',
+    isBlocked: false,
+    hazardPenalty: 0,
+    maxSafeSpeed: 80,
+    roadName: 'ROAD-020',
+    capacity: 'FOUR_LANE'
+  },
+  {
+    edgeId: 'E-21',
+    fromNodeId: 'N-15',
+    toNodeId: 'N-12',
+    distanceMeters: 1110,
+    estimatedTravelSeconds: 70,
+    estimatedTravelTimeSeconds: 70,
+    roadType: 'SERVICE',
+    direction: 'ONE_WAY',
+    isBlocked: false,
+    hazardPenalty: 0,
+    maxSafeSpeed: 40,
+    roadName: 'ROAD-021',
+    capacity: 'SINGLE_LANE'
+  },
+  {
+    edgeId: 'E-22',
+    fromNodeId: 'N-12',
+    toNodeId: 'N-06',
+    distanceMeters: 1110,
+    estimatedTravelSeconds: 80,
+    estimatedTravelTimeSeconds: 80,
+    roadType: 'EMERGENCY_ACCESS',
+    direction: 'ONE_WAY',
+    isBlocked: false,
+    hazardPenalty: 0,
+    maxSafeSpeed: 50,
+    roadName: 'ROAD-022',
+    capacity: 'EMERGENCY_CORRIDOR'
+  },
+  {
+    edgeId: 'E-23',
+    fromNodeId: 'N-03',
+    toNodeId: 'N-18',
+    distanceMeters: 1110,
+    estimatedTravelSeconds: 90,
+    estimatedTravelTimeSeconds: 90,
+    roadType: 'LOCAL',
+    direction: 'BIDIRECTIONAL',
+    isBlocked: false,
+    hazardPenalty: 0,
+    maxSafeSpeed: 40,
+    roadName: 'ROAD-023',
+    capacity: 'TWO_LANE'
+  },
+  {
+    edgeId: 'E-24',
+    fromNodeId: 'N-18',
+    toNodeId: 'N-21',
+    distanceMeters: 1110,
+    estimatedTravelSeconds: 100,
+    estimatedTravelTimeSeconds: 100,
+    roadType: 'SERVICE',
+    direction: 'BIDIRECTIONAL',
+    isBlocked: false,
+    hazardPenalty: 0,
+    maxSafeSpeed: 35,
+    roadName: 'ROAD-024',
+    capacity: 'SINGLE_LANE'
+  },
+  {
+    edgeId: 'E-25',
+    fromNodeId: 'N-21',
+    toNodeId: 'N-07',
+    distanceMeters: 1110,
+    estimatedTravelSeconds: 85,
+    estimatedTravelTimeSeconds: 85,
+    roadType: 'LOCAL',
+    direction: 'BIDIRECTIONAL',
+    isBlocked: false,
+    hazardPenalty: 0,
+    maxSafeSpeed: 40,
+    roadName: 'ROAD-025',
+    capacity: 'TWO_LANE'
+  },
+  {
+    edgeId: 'E-26',
+    fromNodeId: 'N-18',
+    toNodeId: 'N-19',
+    distanceMeters: 2220,
+    estimatedTravelSeconds: 160,
+    estimatedTravelTimeSeconds: 160,
+    roadType: 'SECONDARY',
+    direction: 'BIDIRECTIONAL',
+    isBlocked: false,
+    hazardPenalty: 0,
+    maxSafeSpeed: 50,
+    roadName: 'ROAD-026',
+    capacity: 'TWO_LANE'
+  },
+  {
+    edgeId: 'E-27',
+    fromNodeId: 'N-19',
+    toNodeId: 'N-14',
+    distanceMeters: 1570,
+    estimatedTravelSeconds: 120,
+    estimatedTravelTimeSeconds: 120,
+    roadType: 'LOCAL',
+    direction: 'BIDIRECTIONAL',
+    isBlocked: false,
+    hazardPenalty: 0,
+    maxSafeSpeed: 40,
+    roadName: 'ROAD-027',
+    capacity: 'TWO_LANE'
+  },
+  {
+    edgeId: 'E-28',
+    fromNodeId: 'N-04',
+    toNodeId: 'N-20',
+    distanceMeters: 1110,
+    estimatedTravelSeconds: 75,
+    estimatedTravelTimeSeconds: 75,
+    roadType: 'PRIMARY',
+    direction: 'ONE_WAY',
+    isBlocked: false,
+    hazardPenalty: 0,
+    maxSafeSpeed: 60,
+    roadName: 'ROAD-028',
+    capacity: 'TWO_LANE'
+  },
+  {
+    edgeId: 'E-29',
+    fromNodeId: 'N-20',
+    toNodeId: 'N-15',
+    distanceMeters: 2220,
+    estimatedTravelSeconds: 140,
+    estimatedTravelTimeSeconds: 140,
+    roadType: 'HIGHWAY',
+    direction: 'ONE_WAY',
+    isBlocked: false,
+    hazardPenalty: 0,
+    maxSafeSpeed: 70,
+    roadName: 'ROAD-029',
+    capacity: 'FOUR_LANE'
+  },
+  {
+    edgeId: 'E-30',
+    fromNodeId: 'N-09',
+    toNodeId: 'N-22',
+    distanceMeters: 1110,
+    estimatedTravelSeconds: 100,
+    estimatedTravelTimeSeconds: 100,
+    roadType: 'UNPAVED',
+    direction: 'BIDIRECTIONAL',
+    isBlocked: false,
+    hazardPenalty: 0,
+    maxSafeSpeed: 30,
+    roadName: 'ROAD-030',
+    capacity: 'SINGLE_LANE'
+  },
+  {
+    edgeId: 'E-31',
+    fromNodeId: 'N-22',
+    toNodeId: 'N-20',
+    distanceMeters: 1110,
+    estimatedTravelSeconds: 90,
+    estimatedTravelTimeSeconds: 90,
+    roadType: 'LOCAL',
+    direction: 'BIDIRECTIONAL',
+    isBlocked: false,
+    hazardPenalty: 0,
+    maxSafeSpeed: 40,
+    roadName: 'ROAD-031',
+    capacity: 'TWO_LANE'
+  },
+  {
+    edgeId: 'E-32',
+    fromNodeId: 'N-05',
+    toNodeId: 'N-17',
+    distanceMeters: 1110,
+    estimatedTravelSeconds: 90,
+    estimatedTravelTimeSeconds: 90,
+    roadType: 'LOCAL',
+    direction: 'BIDIRECTIONAL',
+    isBlocked: false,
+    hazardPenalty: 0,
+    maxSafeSpeed: 40,
+    roadName: 'ROAD-032',
+    capacity: 'TWO_LANE'
+  },
+  {
+    edgeId: 'E-33',
+    fromNodeId: 'N-08',
+    toNodeId: 'N-24',
+    distanceMeters: 1110,
+    estimatedTravelSeconds: 120,
+    estimatedTravelTimeSeconds: 120,
+    roadType: 'TUNNEL',
+    direction: 'BIDIRECTIONAL',
+    isBlocked: false,
+    hazardPenalty: 0,
+    maxSafeSpeed: 30,
+    roadName: 'ROAD-033',
+    capacity: 'TWO_LANE'
+  },
+  {
+    edgeId: 'E-34',
+    fromNodeId: 'N-24',
+    toNodeId: 'N-16',
+    distanceMeters: 1110,
+    estimatedTravelSeconds: 100,
+    estimatedTravelTimeSeconds: 100,
+    roadType: 'EMERGENCY_ACCESS',
+    direction: 'BIDIRECTIONAL',
+    isBlocked: false,
+    hazardPenalty: 0,
+    maxSafeSpeed: 45,
+    roadName: 'ROAD-034',
+    capacity: 'EMERGENCY_CORRIDOR'
+  },
+  {
+    edgeId: 'E-35',
+    fromNodeId: 'N-13',
+    toNodeId: 'N-23',
+    distanceMeters: 1240,
+    estimatedTravelSeconds: 100,
+    estimatedTravelTimeSeconds: 100,
+    roadType: 'BRIDGE',
+    direction: 'BIDIRECTIONAL',
+    isBlocked: false,
+    hazardPenalty: 0,
+    maxSafeSpeed: 40,
+    roadName: 'ROAD-035',
+    capacity: 'TWO_LANE'
+  }
+];
+
+export const SYNTHETIC_MAP_HAZARDS: Hazard[] = [
+  {
+    hazardId: 'HAZ-SYN-01',
+    type: 'FLOOD',
+    severity: 'HIGH',
+    latitude: 10.0150,
+    longitude: 9.9850,
+    radiusMeters: 250,
+    geometryType: 'CIRCLE',
+    active: true,
+    source: 'OFFLINE_TRAINING_MONITOR',
+    createdAt: '2026-09-20T00:00:00.000Z',
+    description: 'Flash flooding inundation near river checkpoint zone'
+  },
+  {
+    hazardId: 'HAZ-SYN-02',
+    type: 'FIRE',
+    severity: 'CRITICAL',
+    latitude: 10.0320,
+    longitude: 10.0020,
+    radiusMeters: 300,
+    geometryType: 'CIRCLE',
+    active: true,
+    source: 'OFFLINE_TRAINING_MONITOR',
+    createdAt: '2026-09-20T00:00:00.000Z',
+    description: 'Active commercial structure fire near North Staging'
+  },
+  {
+    hazardId: 'HAZ-SYN-03',
+    type: 'CHEMICAL',
+    severity: 'MEDIUM',
+    latitude: 9.9920,
+    longitude: 10.0180,
+    radiusMeters: 200,
+    geometryType: 'CIRCLE',
+    active: true,
+    source: 'OFFLINE_TRAINING_MONITOR',
+    createdAt: '2026-09-20T00:00:00.000Z',
+    description: 'Industrial chemical residue hazard perimeter'
+  },
+  {
+    hazardId: 'HAZ-SYN-04',
+    type: 'ELECTRICAL',
+    severity: 'LOW',
+    latitude: 10.0050,
+    longitude: 9.9820,
+    radiusMeters: 150,
+    geometryType: 'CIRCLE',
+    active: true,
+    source: 'OFFLINE_TRAINING_MONITOR',
+    createdAt: '2026-09-20T00:00:00.000Z',
+    description: 'Downed high-voltage power lines across access path'
+  },
+  {
+    hazardId: 'HAZ-SYN-05',
+    type: 'STRUCTURAL',
+    severity: 'HIGH',
+    latitude: 9.9880,
+    longitude: 9.9820,
+    radiusMeters: 200,
+    geometryType: 'CIRCLE',
+    active: true,
+    source: 'OFFLINE_TRAINING_MONITOR',
+    createdAt: '2026-09-20T00:00:00.000Z',
+    description: 'Bridge foundation seismic fracture'
+  }
+];
+
+export const SYNTHETIC_MAP_BLOCKED_ROADS: BlockedRoad[] = [
+  {
+    blockedRoadId: 'BLK-SYN-01',
+    edgeId: 'E-30',
+    reason: 'Debris flow across unpaved access corridor',
+    severity: 'CRITICAL',
+    source: 'OFFLINE_TRAINING_OPS',
+    createdAt: '2026-09-20T00:00:00.000Z',
+    active: true
+  },
+  {
+    blockedRoadId: 'BLK-SYN-02',
+    edgeId: 'E-24',
+    reason: 'Emergency maintenance closure on service sector',
+    severity: 'HIGH',
+    source: 'OFFLINE_TRAINING_OPS',
+    createdAt: '2026-09-20T00:00:00.000Z',
+    active: true
+  }
+];
+

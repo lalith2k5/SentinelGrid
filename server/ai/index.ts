@@ -1,20 +1,39 @@
 import { AIProvider, AIProviderStatus } from './types.ts';
-import { GeminiProvider } from './GeminiProvider.ts';
-import { LocalModelProvider } from './LocalModelProvider.ts';
+import { LocalHeuristicProvider } from './localHeuristicProvider.ts';
 
 export class AIServiceRegistry {
   private providers: Map<string, AIProvider> = new Map();
-  private activeProviderId: string = 'local-ollama';
+  private activeProviderId: string = 'local-heuristic';
 
   constructor() {
-    const local = new LocalModelProvider();
-    const gemini = new GeminiProvider();
-    this.providers.set(local.id, local);
-    this.providers.set(gemini.id, gemini);
+    const heuristic = new LocalHeuristicProvider();
+    this.providers.set(heuristic.id, heuristic);
   }
 
-  public getActiveProvider(): AIProvider | undefined {
-    return this.providers.get(this.activeProviderId);
+  public registerProvider(provider: AIProvider): void {
+    this.providers.set(provider.id, provider);
+  }
+
+  public setActiveProvider(id: string): void {
+    if (!this.providers.has(id)) {
+      throw new Error(`AI Provider with ID '${id}' is not registered.`);
+    }
+    this.activeProviderId = id;
+  }
+
+  public getActiveProvider(): AIProvider {
+    const provider = this.providers.get(this.activeProviderId);
+    if (!provider) {
+      // Fallback guaranteed provider
+      const fallback = new LocalHeuristicProvider();
+      this.providers.set(fallback.id, fallback);
+      return fallback;
+    }
+    return provider;
+  }
+
+  public getProviderById(id: string): AIProvider | undefined {
+    return this.providers.get(id);
   }
 
   public async getAllStatuses(): Promise<AIProviderStatus[]> {
@@ -27,18 +46,10 @@ export class AIServiceRegistry {
 
   public async getPrimaryStatus(): Promise<AIProviderStatus> {
     const provider = this.getActiveProvider();
-    if (!provider) {
-      return {
-        providerId: 'none',
-        displayName: 'AI Engine',
-        isConfigured: false,
-        statusMessage: 'Not configured — Coming in Phase 3',
-        requiresInternet: false,
-        localCompatible: true
-      };
-    }
     return provider.getStatus();
   }
 }
 
 export const aiRegistry = new AIServiceRegistry();
+export { LocalHeuristicProvider };
+export * from './types.ts';
