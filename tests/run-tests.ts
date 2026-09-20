@@ -27,6 +27,8 @@ import { localRetrievalEngine, tokenize } from '../server/knowledge/retrievalEng
 import { ragEngine } from '../server/knowledge/ragEngine.ts';
 import { DEFAULT_KNOWLEDGE_CORPUS, CORPUS_METADATA } from '../server/knowledge/defaultCorpus.ts';
 import knowledgeRoutes from '../server/routes/knowledgeRoutes.ts';
+import { verificationService } from '../server/services/verificationService.ts';
+import corroborationRoutes from '../server/routes/corroborationRoutes.ts';
 
 // Dedicated test database file so we don't clobber production or local session data
 const TEST_DB_PATH = path.join(process.cwd(), 'data', 'sentinelgrid.test.json');
@@ -7410,6 +7412,1191 @@ async function runAllTests() {
         assert.equal(ragRes1.requiresHumanReview, ragRes2.requiresHumanReview);
         assert.equal(ragRes1.status, ragRes2.status);
       }
+    }),
+
+    test('PHASE9-001: Distinctness of Corroboration Score from AI Confidence and RAG Retrieval Confidence', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({
+        title: 'Trauma Hemorrhage Scene',
+        description: 'Severe arterial bleeding at site',
+        severity: 'CRITICAL',
+        latitude: 28.6139,
+        longitude: 77.2090
+      });
+
+      const triageRes = await triageService.runTriage(inc.id);
+
+      const docs = ragKnowledgeService.getDocuments();
+      const ragRes = ragEngine.query(docs, { query: 'arterial bleeding tourniquet', category: 'TRAUMA_BLEEDING' });
+
+      const corrobRes = verificationService.getCorroborationResult(inc.id);
+
+      // Verify each score metric is distinctly tracked and not confused
+      assert.ok(typeof corrobRes.corroborationScore === 'number', 'Corroboration score must be a number');
+      assert.ok(typeof triageRes.confidence === 'number', 'AI confidence score must be a number');
+      assert.ok(typeof ragRes.diagnostics.topScore === 'number', 'RAG retrieval score must be a number');
+
+      // Add evidence and check corroboration score changes independently of static AI confidence
+      verificationService.addEvidence(inc.id, {
+        type: 'MESH_OBSERVATION',
+        content: 'Mesh node verified 1 victim arterial pressure applied',
+        latitude: 28.6140,
+        longitude: 77.2091,
+        confidence: 0.85
+      });
+
+      const updatedCorrob = verificationService.getCorroborationResult(inc.id);
+      assert.notEqual(updatedCorrob.corroborationScore, corrobRes.corroborationScore, 'Corroboration score must update with new evidence');
+      assert.ok(typeof triageRes.confidence === 'number', 'AI triage confidence remains unchanged by external corroboration evidence');
+    }),
+
+    test('PHASE9-002: Corroboration states (REPORTED, AI_TRIAGED, CORROBORATED, RESPONDER_VERIFIED, CONFIRMED)', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({
+        title: 'Structure Fire Report',
+        description: 'Smoke coming from residential roof',
+        latitude: 28.6000,
+        longitude: 77.2000
+      });
+
+      // 1. Initial State -> REPORTED
+      let corrob = verificationService.getCorroborationResult(inc.id);
+      assert.equal(corrob.verificationStatus, 'REPORTED');
+
+      // 2. AI Triage -> AI_TRIAGED
+      verificationService.addEvidence(inc.id, {
+        type: 'AI_TRIAGE_EVIDENCE',
+        content: 'AI classification: STRUCTURE_FIRE, P2',
+        confidence: 0.80
+      });
+      corrob = verificationService.getCorroborationResult(inc.id);
+      assert.equal(corrob.verificationStatus, 'AI_TRIAGED');
+
+      // 3. Independent field evidence -> CORROBORATED
+      verificationService.addEvidence(inc.id, {
+        type: 'SECONDARY_INCIDENT_REPORT',
+        content: 'Neighbor reporting flame visible on second floor',
+        latitude: 28.6001,
+        longitude: 77.2001,
+        independenceGroup: 'NEIGHBOR-REPORT'
+      });
+      corrob = verificationService.getCorroborationResult(inc.id);
+      assert.equal(corrob.verificationStatus, 'CORROBORATED');
+
+      // 4. Responder direct scene confirmation -> RESPONDER_VERIFIED
+      verificationService.addEvidence(inc.id, {
+        type: 'RESPONDER_CONFIRMATION',
+        content: 'Engine 1 on scene confirming active room and contents fire',
+        latitude: 28.6000,
+        longitude: 77.2000,
+        confidence: 0.95,
+        independenceGroup: 'RESPONDER-E1'
+      });
+      corrob = verificationService.getCorroborationResult(inc.id);
+      assert.equal(corrob.verificationStatus, 'RESPONDER_VERIFIED');
+
+      // 5. Commander explicit confirmation -> CONFIRMED
+      verificationService.manuallyVerify(inc.id, 'CONFIRMED', 'Commander verification', {
+        userId: 'admin-1',
+        role: 'ADMIN',
+        name: 'Commander Alpha'
+      });
+      corrob = verificationService.getCorroborationResult(inc.id);
+      assert.equal(corrob.verificationStatus, 'CONFIRMED');
+    }),
+
+    test('PHASE9-003: Initial report creates REPORTED corroboration state', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({
+        title: 'Single Reporter Accident',
+        description: 'Single car vehicle spinout'
+      });
+
+      const corrob = verificationService.getCorroborationResult(inc.id);
+      assert.equal(corrob.verificationStatus, 'REPORTED');
+      assert.equal(corrob.independentSourceCount, 1);
+      assert.equal(corrob.totalEvidenceCount, 1);
+    }),
+
+    test('PHASE9-004: AI Triage adds AI_TRIAGE_EVIDENCE without setting CONFIRMED or RESOLVED', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({
+        title: 'Suspected Gas Leak',
+        description: 'Odor of natural gas in basement'
+      });
+
+      verificationService.addEvidence(inc.id, {
+        type: 'AI_TRIAGE_EVIDENCE',
+        content: 'AI classification: HAZMAT_GAS, P1',
+        confidence: 0.90
+      });
+
+      const updatedInc = db.findIncidentById(inc.id)!;
+      assert.notEqual(updatedInc.status, 'RESOLVED');
+
+      const corrob = verificationService.getCorroborationResult(inc.id);
+      assert.notEqual(corrob.verificationStatus, 'CONFIRMED');
+      assert.equal(corrob.verificationStatus, 'AI_TRIAGED');
+    }),
+
+    test('PHASE9-005: RAG query adds RAG_KNOWLEDGE_EVIDENCE without overriding responder or changing status', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({
+        title: 'Chemical Spill',
+        description: 'Liquid ammonia drum leak'
+      });
+
+      verificationService.addEvidence(inc.id, {
+        type: 'RESPONDER_CONFIRMATION',
+        content: 'Hazmat 1 on scene confirming 55 gal drum leak',
+        confidence: 0.95
+      });
+
+      let corrob = verificationService.getCorroborationResult(inc.id);
+      assert.equal(corrob.verificationStatus, 'RESPONDER_VERIFIED');
+
+      // Add RAG Knowledge evidence
+      verificationService.addEvidence(inc.id, {
+        type: 'RAG_KNOWLEDGE_EVIDENCE',
+        content: 'RAG guideline: Evacuate 500m downwind for ammonia drum breach',
+        confidence: 0.60
+      });
+
+      corrob = verificationService.getCorroborationResult(inc.id);
+      assert.equal(corrob.verificationStatus, 'RESPONDER_VERIFIED', 'RAG evidence must not override RESPONDER_VERIFIED state');
+
+      const incAfter = db.findIncidentById(inc.id)!;
+      assert.notEqual(incAfter.status, 'RESOLVED');
+    }),
+
+    test('PHASE9-006: Independent multi-source reports increase Corroboration Score', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({
+        title: 'Wildfire Plume',
+        description: 'Smoke column on ridge',
+        latitude: 28.5000,
+        longitude: 77.1000
+      });
+
+      const score1 = verificationService.getCorroborationResult(inc.id).corroborationScore;
+
+      verificationService.addEvidence(inc.id, {
+        type: 'SECONDARY_INCIDENT_REPORT',
+        content: 'Lookout Tower 2 reports smoke at 28.5002, 77.1001',
+        latitude: 28.5002,
+        longitude: 77.1001,
+        independenceGroup: 'LOOKOUT-TOWER-2'
+      });
+
+      const score2 = verificationService.getCorroborationResult(inc.id).corroborationScore;
+      assert.ok(score2 > score1, `Score with 2 independent sources (${score2}) must be strictly higher than single source (${score1})`);
+
+      verificationService.addEvidence(inc.id, {
+        type: 'MESH_OBSERVATION',
+        content: 'Mesh Node M-14 field sensor detects particulate spikes at ridge',
+        latitude: 28.5003,
+        longitude: 77.1002,
+        independenceGroup: 'MESH-NODE-M14'
+      });
+
+      const score3 = verificationService.getCorroborationResult(inc.id).corroborationScore;
+      assert.ok(score3 > score2, `Score with 3 independent sources (${score3}) must be strictly higher than 2 sources (${score2})`);
+    }),
+
+    test('PHASE9-007: Duplicate mesh packets MUST NOT be counted as independent evidence (deduplication & fingerprinting)', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({
+        title: 'Bridge Collapse',
+        description: 'North pier structural failure'
+      });
+
+      verificationService.getEvidenceForIncident(inc.id);
+
+      const payload = {
+        type: 'MESH_OBSERVATION' as const,
+        sourceId: 'NODE-77',
+        content: 'Bridge north pier failure observed',
+        latitude: 28.6100,
+        longitude: 77.2000,
+        timestamp: '2026-09-20T10:00:00Z'
+      };
+
+      // Submit packet 1
+      const ev1 = verificationService.addEvidence(inc.id, payload);
+      assert.equal(ev1.evidence.isDuplicate, false);
+
+      // Submit exact duplicate packet retransmission
+      const ev2 = verificationService.addEvidence(inc.id, payload);
+      assert.equal(ev2.evidence.isDuplicate, true);
+      assert.equal(ev2.evidence.confidence, 0);
+
+      const corrob = verificationService.getCorroborationResult(inc.id);
+      assert.equal(corrob.independentSourceCount, 2, 'Duplicates must not increase independent source count (Initial + 1 Unique Mesh)');
+    }),
+
+    test('PHASE9-008: Responder on-scene observation sets RESPONDER_VERIFIED state', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({
+        title: 'Rollover Crash',
+        description: 'Two vehicle collision with entrapment'
+      });
+
+      verificationService.responderConfirm(inc.id, {
+        notes: 'Rescue 1 on scene confirming driver trapped, hydraulic extrication required',
+        verifiedVictimCount: 2,
+        latitude: 28.6139,
+        longitude: 77.2090
+      }, {
+        userId: 'resp-1',
+        role: 'RESPONDER',
+        name: 'Lt. Dan'
+      });
+
+      const corrob = verificationService.getCorroborationResult(inc.id);
+      assert.equal(corrob.verificationStatus, 'RESPONDER_VERIFIED');
+      assert.equal(corrob.victimCountAssessment.verifiedCount, 2);
+    }),
+
+    test('PHASE9-009: Human commander explicit confirmation sets CONFIRMED state', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({
+        title: 'Transformer Explosion',
+        description: 'Power substation arc flash'
+      });
+
+      const result = verificationService.manuallyVerify(inc.id, 'CONFIRMED', 'Substation chief confirmed live arc', {
+        userId: 'admin-1',
+        role: 'ADMIN',
+        name: 'Chief Miller'
+      });
+
+      assert.equal(result.verificationStatus, 'CONFIRMED');
+    }),
+
+    test('PHASE9-010: Disputed or conflicting reports set CONFLICTING or DISPUTED state', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({
+        title: 'Pipeline Leak',
+        description: 'Gas plume near school',
+        latitude: 28.6139,
+        longitude: 77.2090
+      });
+
+      verificationService.getEvidenceForIncident(inc.id);
+
+      // Submit conflicting evidence (Location mismatch > 2000m)
+      verificationService.addEvidence(inc.id, {
+        type: 'SECONDARY_INCIDENT_REPORT',
+        content: 'Reported pipeline leak is 10km away in North Sector',
+        latitude: 28.8000,
+        longitude: 77.5000,
+        independenceGroup: 'PUBLIC-NORTH'
+      });
+
+      const corrob = verificationService.getCorroborationResult(inc.id);
+      assert.equal(corrob.verificationStatus, 'CONFLICTING');
+      assert.ok(corrob.conflicts.length > 0);
+    }),
+
+    test('PHASE9-011: Category conflict detection (e.g. FIRE vs FLOOD)', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({
+        title: 'Industrial Hazard',
+        description: 'Unclear situation at chemical plant'
+      });
+
+      verificationService.addEvidence(inc.id, {
+        type: 'SECONDARY_INCIDENT_REPORT',
+        content: 'Major chemical warehouse structure fire',
+        category: 'FIRE',
+        independenceGroup: 'GRP-1'
+      });
+
+      verificationService.addEvidence(inc.id, {
+        type: 'SECONDARY_INCIDENT_REPORT',
+        content: 'Riverbank surge flooding chemical storage basement',
+        category: 'FLOOD',
+        independenceGroup: 'GRP-2'
+      });
+
+      const conflicts = verificationService.getConflicts(inc.id);
+      const catConflict = conflicts.find(c => c.type === 'CATEGORY_CONFLICT');
+      assert.ok(catConflict, 'Category conflict must be detected when FIRE and FLOOD are reported for same incident');
+    }),
+
+    test('PHASE9-012: Severity conflict detection (e.g. P1 vs P4)', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({
+        title: 'Bus Incident',
+        description: 'Transit bus stopped on highway'
+      });
+
+      verificationService.addEvidence(inc.id, {
+        type: 'SECONDARY_INCIDENT_REPORT',
+        content: 'Mass casualty crash bus overturned with multiple trapped',
+        severity: 'P1',
+        independenceGroup: 'PASSENGER'
+      });
+
+      verificationService.addEvidence(inc.id, {
+        type: 'SECONDARY_INCIDENT_REPORT',
+        content: 'Minor engine overheat bus parked safely on shoulder no injuries',
+        severity: 'P4',
+        independenceGroup: 'DRIVER'
+      });
+
+      const conflicts = verificationService.getConflicts(inc.id);
+      const sevConflict = conflicts.find(c => c.type === 'SEVERITY_CONFLICT');
+      assert.ok(sevConflict, 'Severity conflict must be detected when P1 and P4 are reported');
+    }),
+
+    test('PHASE9-013: Hazard conflict detection (e.g. HAZMAT vs NO_HAZARD)', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({
+        title: 'Train Derailment',
+        description: 'Cargo cars off tracks'
+      });
+
+      verificationService.addEvidence(inc.id, {
+        type: 'SECONDARY_INCIDENT_REPORT',
+        content: 'Chlorine tanker rupture active toxic gas plume',
+        severity: 'P1',
+        independenceGroup: 'HAZMAT-TEAM'
+      });
+
+      verificationService.addEvidence(inc.id, {
+        type: 'SECONDARY_INCIDENT_REPORT',
+        content: 'Empty grain hopper cars minor derailment no hazmat present',
+        severity: 'P4',
+        independenceGroup: 'RAIL-OPERATOR'
+      });
+
+      const conflicts = verificationService.getConflicts(inc.id);
+      assert.ok(conflicts.length > 0, 'Conflict must be detected between toxic gas tanker and empty grain hopper reports');
+    }),
+
+    test('PHASE9-014: Location conflict detection (> 2000m distance threshold)', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({
+        title: 'Explosion Sound',
+        description: 'Loud bang reported in metro region',
+        latitude: 28.6139,
+        longitude: 77.2090
+      });
+
+      // Ensure initial report evidence is seeded with location
+      verificationService.getEvidenceForIncident(inc.id);
+
+      verificationService.addEvidence(inc.id, {
+        type: 'SECONDARY_INCIDENT_REPORT',
+        content: 'Explosion at South Substation',
+        latitude: 28.5000,
+        longitude: 77.1000, // ~16 km away
+        independenceGroup: 'SOUTH-REPORTER'
+      });
+
+      const conflicts = verificationService.getConflicts(inc.id);
+      const locConflict = conflicts.find(c => c.type === 'LOCATION_CONFLICT');
+      assert.ok(locConflict, 'Location conflict must be detected when distance exceeds 2000m');
+    }),
+
+    test('PHASE9-015: Time conflict detection (> 120m lag threshold)', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({
+        title: 'Flash Flood',
+        description: 'Current culvert overflow'
+      });
+      inc.createdAt = '2026-09-20T10:00:00Z';
+
+      // Evidence claiming report from 5 hours ago
+      verificationService.addEvidence(inc.id, {
+        type: 'SECONDARY_INCIDENT_REPORT',
+        content: 'Culvert was clear during morning inspection',
+        timestamp: '2026-09-20T05:00:00Z',
+        independenceGroup: 'INSPECTOR'
+      });
+
+      const corrob = verificationService.getCorroborationResult(inc.id);
+      assert.equal(corrob.timeAssessment.status, 'TEMPORAL_MISMATCH');
+    }),
+
+    test('PHASE9-016: Victim count conflict detection (Estimated vs Verified discrepancy)', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({
+        title: 'Building Collapse',
+        description: 'Roof collapse at venue'
+      });
+
+      // Initial estimated reports claim 15 victims
+      verificationService.addEvidence(inc.id, {
+        type: 'SECONDARY_INCIDENT_REPORT',
+        content: 'Estimated 15 people trapped under debris',
+        victimCount: 15,
+        independenceGroup: 'BYSTANDER'
+      });
+
+      // Responder arrives on scene and verifies 1 victim
+      verificationService.responderConfirm(inc.id, {
+        notes: 'USAR Team 1 on scene: 1 minor casualty located, zero trapped',
+        verifiedVictimCount: 1
+      }, {
+        userId: 'usar-1',
+        role: 'RESPONDER',
+        name: 'USAR Lead'
+      });
+
+      const corrob = verificationService.getCorroborationResult(inc.id);
+      assert.equal(corrob.victimCountAssessment.hasConflict, true);
+      assert.equal(corrob.victimCountAssessment.verifiedCount, 1);
+      assert.equal(corrob.victimCountAssessment.estimatedConsensus, 15);
+    }),
+
+    test('PHASE9-017: Status conflict detection (Reported CONTAINED vs active scene report)', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({
+        title: 'Brush Fire',
+        description: 'Dry brush burning near park'
+      });
+
+      verificationService.addEvidence(inc.id, {
+        type: 'SECONDARY_INCIDENT_REPORT',
+        content: 'Fire is fully contained and extinguished by volunteers',
+        structuredFacts: { status: 'CONTAINED' },
+        independenceGroup: 'VOLUNTEERS'
+      });
+
+      verificationService.addEvidence(inc.id, {
+        type: 'SECONDARY_INCIDENT_REPORT',
+        content: 'Wind flare-up fire spreading rapidly into tree canopy',
+        structuredFacts: { status: 'ACTIVE_FIRE' },
+        independenceGroup: 'LOOKOUT'
+      });
+
+      const corrob = verificationService.getCorroborationResult(inc.id);
+      assert.ok(corrob.requiresHumanReview, 'Status conflict between contained and active flare-up requires human review');
+    }),
+
+    test('PHASE9-018: Human review gate triggered when conflicts exist', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({
+        title: 'Conflicting Call',
+        description: 'Ambiguous emergency report'
+      });
+
+      verificationService.addEvidence(inc.id, {
+        type: 'SECONDARY_INCIDENT_REPORT',
+        content: 'Explosion at 28.5000, 77.1000',
+        latitude: 28.5000,
+        longitude: 77.1000,
+        independenceGroup: 'CALLER-1'
+      });
+
+      verificationService.addEvidence(inc.id, {
+        type: 'SECONDARY_INCIDENT_REPORT',
+        content: 'Explosion at 28.7000, 77.4000',
+        latitude: 28.7000,
+        longitude: 77.4000,
+        independenceGroup: 'CALLER-2'
+      });
+
+      const corrob = verificationService.getCorroborationResult(inc.id);
+      assert.equal(corrob.requiresHumanReview, true);
+      assert.ok(corrob.humanReviewReasons.some(r => r.includes('conflict')));
+    }),
+
+    test('PHASE9-019: Human review gate triggered for single-source reports', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({
+        title: 'Uncorroborated Report',
+        description: 'Single anonymous report of gas leak'
+      });
+
+      const corrob = verificationService.getCorroborationResult(inc.id);
+      assert.equal(corrob.requiresHumanReview, true);
+      assert.ok(corrob.humanReviewReasons.some(r => r.includes('Single source')));
+    }),
+
+    test('PHASE9-020: Human review gate triggered for low score (< 40/100)', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({
+        title: 'Low Confidence Event',
+        description: 'Vague noise report'
+      });
+
+      // Clear initial physical evidence and add single derived low-confidence evidence
+      db.getEvidenceItems(inc.id).length = 0;
+      verificationService.addEvidence(inc.id, {
+        type: 'AI_TRIAGE_EVIDENCE',
+        content: 'Low confidence AI noise report inference',
+        confidence: 0.2
+      });
+
+      const corrob = verificationService.getCorroborationResult(inc.id);
+      assert.ok(corrob.corroborationScore < 40, `Score (${corrob.corroborationScore}) must be < 40`);
+      assert.equal(corrob.requiresHumanReview, true);
+    }),
+
+    test('PHASE9-021: Human review gate triggered for CRITICAL / P1 priority incidents', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({
+        title: 'Mass Casualty Structural Collapse',
+        description: 'Arena roof failure',
+        severity: 'CRITICAL'
+      });
+
+      const corrob = verificationService.getCorroborationResult(inc.id);
+      assert.equal(corrob.requiresHumanReview, true);
+      assert.ok(corrob.humanReviewReasons.some(r => r.includes('CRITICAL priority')));
+    }),
+
+    test('PHASE9-022: Human review gate triggered for chemical/hazmat/collapse hazards', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({
+        title: 'Hazmat Chlorine Spill',
+        description: 'Water treatment plant cylinder rupture'
+      });
+
+      verificationService.addEvidence(inc.id, {
+        type: 'SECONDARY_INCIDENT_REPORT',
+        content: 'Toxic chlorine gas leak evacuation needed',
+        hazards: ['CHEMICAL_LEAK', 'TOXIC_GAS'],
+        independenceGroup: 'PLANT-MGR'
+      });
+
+      const corrob = verificationService.getCorroborationResult(inc.id);
+      assert.equal(corrob.requiresHumanReview, true);
+    }),
+
+    test('PHASE9-023: Human review gate triggered when estimated vs verified victim counts differ', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({
+        title: 'Trench Collapse',
+        description: 'Construction trench caved in'
+      });
+
+      verificationService.addEvidence(inc.id, {
+        type: 'SECONDARY_INCIDENT_REPORT',
+        content: '5 workers estimated buried',
+        victimCount: 5,
+        independenceGroup: 'FOREMAN'
+      });
+
+      verificationService.responderConfirm(inc.id, {
+        notes: 'Rescue 1 verified 1 worker trapped, 4 escaped safely',
+        verifiedVictimCount: 1
+      }, {
+        userId: 'resp-1',
+        role: 'RESPONDER',
+        name: 'Capt. Smith'
+      });
+
+      const corrob = verificationService.getCorroborationResult(inc.id);
+      assert.equal(corrob.requiresHumanReview, true);
+      assert.ok(corrob.humanReviewReasons.some(r => r.includes('Discrepancy')));
+    }),
+
+    test('PHASE9-024: Human review gate triggered when only derived evidence (AI/RAG) exists', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({
+        title: 'AI Inferred Anomaly',
+        description: 'System generated alert'
+      });
+
+      // Clear initial physical evidence for test purpsoes
+      db.getEvidenceItems(inc.id).length = 0;
+
+      verificationService.addEvidence(inc.id, {
+        type: 'AI_TRIAGE_EVIDENCE',
+        content: 'AI model inference alert',
+        confidence: 0.8
+      });
+
+      verificationService.addEvidence(inc.id, {
+        type: 'RAG_KNOWLEDGE_EVIDENCE',
+        content: 'RAG historic precedent match',
+        confidence: 0.6
+      });
+
+      const corrob = verificationService.getCorroborationResult(inc.id);
+      assert.equal(corrob.requiresHumanReview, true);
+      assert.ok(corrob.humanReviewReasons.some(r => r.includes('AI/RAG')));
+    }),
+
+    test('PHASE9-025: Non-mutation invariant: Corroboration NEVER automatically resolves an incident', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({
+        title: 'Warehouse Fire',
+        description: 'Active structure fire'
+      });
+
+      verificationService.addEvidence(inc.id, {
+        type: 'RESPONDER_CONFIRMATION',
+        content: 'Fire extinguished and overhaul complete',
+        confidence: 0.99
+      });
+
+      verificationService.getCorroborationResult(inc.id);
+
+      const incAfter = db.findIncidentById(inc.id)!;
+      assert.equal(incAfter.status, 'OPEN', 'Incident status must remain OPEN until explicit human status mutation');
+    }),
+
+    test('PHASE9-026: Non-mutation invariant: Corroboration NEVER automatically dispatches a resource', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({
+        title: 'High Priority Trauma',
+        description: 'Severe injury needing ambulance'
+      });
+
+      const initialDispatches = db.getDispatches().length;
+
+      // Add high score responder evidence
+      verificationService.addEvidence(inc.id, {
+        type: 'RESPONDER_CONFIRMATION',
+        content: 'Confirmed high severity trauma scene',
+        confidence: 0.99
+      });
+
+      verificationService.getCorroborationResult(inc.id);
+
+      const afterDispatches = db.getDispatches().length;
+      assert.equal(afterDispatches, initialDispatches, 'Corroboration engine must NEVER auto-dispatch resources');
+    }),
+
+    test('PHASE9-027: Non-mutation invariant: Corroboration NEVER automatically cancels a dispatch', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({
+        title: 'False Alarm Suspect',
+        description: 'Smoke reported',
+        latitude: 10.0,
+        longitude: 10.0
+      });
+
+      const res = resourceService.createResource({
+        name: 'Engine 4',
+        type: 'FIRE_UNIT',
+        status: 'AVAILABLE',
+        location: 'Station 4',
+        latitude: 10.01,
+        longitude: 10.01
+      });
+
+      const dispatch = dispatchService.createDispatch({
+        incidentId: inc.id,
+        resourceId: res.id,
+        dispatchNotes: 'Initial dispatch',
+        createdBy: 'admin-1',
+        actorRole: 'ADMIN',
+        actorId: 'admin-1'
+      });
+
+      // Submit evidence claiming false alarm
+      verificationService.addEvidence(inc.id, {
+        type: 'SECONDARY_INCIDENT_REPORT',
+        content: 'False alarm — steam from laundry duct',
+        confidence: 0.9
+      });
+
+      verificationService.getCorroborationResult(inc.id);
+
+      const dispAfter = db.getDispatches().find(d => d.dispatchId === dispatch.dispatchId)!;
+      assert.equal(dispAfter.status, 'PENDING', 'Dispatch status must NOT be cancelled automatically by corroboration');
+    }),
+
+    test('PHASE9-028: Non-mutation invariant: Corroboration NEVER automatically changes resource status', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const res = resourceService.createResource({
+        name: 'Medic 2',
+        type: 'AMBULANCE',
+        status: 'ASSIGNED',
+        location: 'Station 2',
+        latitude: 28.6139,
+        longitude: 77.2090
+      });
+
+      const inc = incidentService.createIncident({
+        title: 'Medical Call',
+        description: 'Chest pain'
+      });
+
+      verificationService.addEvidence(inc.id, {
+        type: 'RESPONDER_OBSERVATION',
+        content: 'Medic 2 arrived on scene'
+      });
+
+      verificationService.getCorroborationResult(inc.id);
+
+      const resAfter = db.getResources().find(r => r.id === res.id)!;
+      assert.equal(resAfter.status, 'ASSIGNED', 'Resource status must NOT be mutated automatically by corroboration');
+    }),
+
+    test('PHASE9-029: Non-mutation invariant: Corroboration NEVER automatically marks estimated victim count as verified', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({
+        title: 'Mass Event Incident',
+        description: 'Crowd panic'
+      });
+
+      verificationService.addEvidence(inc.id, {
+        type: 'SECONDARY_INCIDENT_REPORT',
+        content: 'Estimated 20 injured in surge',
+        victimCount: 20
+      });
+
+      const corrob = verificationService.getCorroborationResult(inc.id);
+      assert.equal(corrob.victimCountAssessment.estimatedConsensus, 20);
+      assert.equal(corrob.victimCountAssessment.verifiedCount, null, 'Estimated count must NEVER be marked as verified without responder confirmation');
+    }),
+
+    test('PHASE9-030: Non-mutation invariant: Corroboration NEVER automatically sets incident status to CONFIRMED', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({
+        title: 'Verified Fire Scene',
+        description: 'Structure fire'
+      });
+
+      verificationService.addEvidence(inc.id, {
+        type: 'SECONDARY_INCIDENT_REPORT',
+        content: 'Report 1',
+        independenceGroup: 'G1'
+      });
+
+      verificationService.addEvidence(inc.id, {
+        type: 'SECONDARY_INCIDENT_REPORT',
+        content: 'Report 2',
+        independenceGroup: 'G2'
+      });
+
+      verificationService.getCorroborationResult(inc.id);
+
+      const incAfter = db.findIncidentById(inc.id)!;
+      assert.equal(incAfter.verificationStatus, 'UNVERIFIED', 'Authoritative incident verificationStatus must NOT be mutated automatically');
+    }),
+
+    test('PHASE9-031: Non-mutation invariant: Corroboration NEVER overrides responder observations', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({
+        title: 'Scene Assessment',
+        description: 'Initial report'
+      });
+
+      verificationService.responderConfirm(inc.id, {
+        notes: 'Responder verified 0 victims',
+        verifiedVictimCount: 0
+      }, {
+        userId: 'resp-1',
+        role: 'RESPONDER',
+        name: 'Officer Davis'
+      });
+
+      // Submit public report claiming 10 victims
+      verificationService.addEvidence(inc.id, {
+        type: 'SECONDARY_INCIDENT_REPORT',
+        content: 'Public claims 10 victims',
+        victimCount: 10,
+        independenceGroup: 'PUBLIC-CROWD'
+      });
+
+      const corrob = verificationService.getCorroborationResult(inc.id);
+      assert.equal(corrob.victimCountAssessment.verifiedCount, 0, 'Responder verified count must remain 0 and not be overridden by public claims');
+    }),
+
+    test('PHASE9-032: Non-mutation invariant: Corroboration NEVER overrides human decisions', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({
+        title: 'Disputed Incident',
+        description: 'Testing human decision lock'
+      });
+
+      // Commander manually marks as DISPUTED
+      verificationService.manuallyVerify(inc.id, 'DISPUTED', 'Commander determined hoax call', {
+        userId: 'admin-1',
+        role: 'ADMIN',
+        name: 'Chief Taylor'
+      });
+
+      // Submit new evidence later
+      verificationService.addEvidence(inc.id, {
+        type: 'SECONDARY_INCIDENT_REPORT',
+        content: 'Subsequent witness report',
+        independenceGroup: 'LATE-WITNESS'
+      });
+
+      const corrob = verificationService.getCorroborationResult(inc.id);
+      assert.equal(corrob.verificationStatus, 'DISPUTED', 'Human manual DISPUTED status lock must be preserved');
+    }),
+
+    test('PHASE9-033: Deterministic scoring model is 100% reproducible with zero Math.random dependency', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({
+        title: 'Deterministic Score Test',
+        description: 'Verifying 100% identical score across 10 evaluation runs'
+      });
+
+      verificationService.addEvidence(inc.id, {
+        type: 'SECONDARY_INCIDENT_REPORT',
+        content: 'Smoke column visible from highway',
+        latitude: 28.6140,
+        longitude: 77.2091,
+        independenceGroup: 'HIGHWAY-OBSERVER'
+      });
+
+      const run1 = verificationService.recalculate(inc.id);
+      const run2 = verificationService.recalculate(inc.id);
+      const run3 = verificationService.recalculate(inc.id);
+
+      assert.equal(run1.corroborationScore, run2.corroborationScore);
+      assert.equal(run2.corroborationScore, run3.corroborationScore);
+      assert.deepEqual(run1.scoreBreakdown, run2.scoreBreakdown);
+    }),
+
+    test('PHASE9-034: Source reliability scoring (Responders > Resources > Mesh > Public > Derived)', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({
+        title: 'Reliability Tier Test',
+        description: 'Evaluating point weights across tiers'
+      });
+
+      // Derived evidence -> 5 pts
+      verificationService.addEvidence(inc.id, { type: 'RAG_KNOWLEDGE_EVIDENCE', content: 'RAG match' });
+      let scoreDerived = verificationService.getCorroborationResult(inc.id).scoreBreakdown.sourceReliabilityScore;
+
+      // Public evidence -> 15 pts
+      verificationService.addEvidence(inc.id, { type: 'SECONDARY_INCIDENT_REPORT', content: 'Public report' });
+      let scorePublic = verificationService.getCorroborationResult(inc.id).scoreBreakdown.sourceReliabilityScore;
+
+      // Mesh evidence -> 18 pts
+      verificationService.addEvidence(inc.id, { type: 'MESH_OBSERVATION', content: 'Mesh telemetry' });
+      let scoreMesh = verificationService.getCorroborationResult(inc.id).scoreBreakdown.sourceReliabilityScore;
+
+      // Responder confirmation -> 25 pts
+      verificationService.addEvidence(inc.id, { type: 'RESPONDER_CONFIRMATION', content: 'On scene responder' });
+      let scoreResponder = verificationService.getCorroborationResult(inc.id).scoreBreakdown.sourceReliabilityScore;
+
+      assert.ok(scoreResponder >= scoreMesh, 'Responder reliability >= Mesh');
+      assert.ok(scoreMesh >= scorePublic, 'Mesh reliability >= Public');
+      assert.ok(scorePublic >= scoreDerived, 'Public reliability >= Derived');
+    }),
+
+    test('PHASE9-035: Directness scoring (Direct physical observation vs derived/computed)', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({
+        title: 'Directness Test',
+        description: 'Testing physical scene observation bonus'
+      });
+
+      // Derived only
+      db.getEvidenceItems(inc.id).length = 0;
+      verificationService.addEvidence(inc.id, { type: 'AI_TRIAGE_EVIDENCE', content: 'AI prediction' });
+      const corrobDerived = verificationService.getCorroborationResult(inc.id);
+      assert.equal(corrobDerived.scoreBreakdown.directnessScore, 5);
+
+      // Direct field observation
+      verificationService.addEvidence(inc.id, { type: 'SECONDARY_INCIDENT_REPORT', content: 'Direct eye witness' });
+      const corrobDirect = verificationService.getCorroborationResult(inc.id);
+      assert.equal(corrobDirect.scoreBreakdown.directnessScore, 10);
+
+      // Responder on scene
+      verificationService.addEvidence(inc.id, { type: 'RESPONDER_CONFIRMATION', content: 'Responder on scene' });
+      const corrobResponder = verificationService.getCorroborationResult(inc.id);
+      assert.equal(corrobResponder.scoreBreakdown.directnessScore, 15);
+    }),
+
+    test('PHASE9-036: Independence scoring (Grouping by source & node)', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({
+        title: 'Independence Score Test',
+        description: 'Multi-source group bonus calculation'
+      });
+
+      // 1 source -> 0 pts bonus
+      let corrob = verificationService.getCorroborationResult(inc.id);
+      assert.equal(corrob.scoreBreakdown.independenceScore, 0);
+
+      // 2 sources -> 10 pts
+      verificationService.addEvidence(inc.id, { type: 'SECONDARY_INCIDENT_REPORT', content: 'Src 2', independenceGroup: 'GRP-2' });
+      corrob = verificationService.getCorroborationResult(inc.id);
+      assert.equal(corrob.scoreBreakdown.independenceScore, 10);
+
+      // 3 sources -> 15 pts
+      verificationService.addEvidence(inc.id, { type: 'SECONDARY_INCIDENT_REPORT', content: 'Src 3', independenceGroup: 'GRP-3' });
+      corrob = verificationService.getCorroborationResult(inc.id);
+      assert.equal(corrob.scoreBreakdown.independenceScore, 15);
+
+      // 4 sources -> 20 pts (max)
+      verificationService.addEvidence(inc.id, { type: 'SECONDARY_INCIDENT_REPORT', content: 'Src 4', independenceGroup: 'GRP-4' });
+      corrob = verificationService.getCorroborationResult(inc.id);
+      assert.equal(corrob.scoreBreakdown.independenceScore, 20);
+    }),
+
+    test('PHASE9-037: Location consistency scoring (Haversine <= 500m vs <= 2000m vs > 2000m)', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({
+        title: 'Location Distance Test',
+        description: 'Testing Haversine proximity tiers',
+        latitude: 28.6139,
+        longitude: 77.2090
+      });
+
+      // <= 500m -> 15 pts
+      verificationService.addEvidence(inc.id, {
+        type: 'SECONDARY_INCIDENT_REPORT',
+        content: 'Nearby witness 100m away',
+        latitude: 28.6140,
+        longitude: 77.2091,
+        independenceGroup: 'NEAR'
+      });
+      let corrob = verificationService.getCorroborationResult(inc.id);
+      assert.equal(corrob.locationAssessment.status, 'LOCATION_CONSISTENT');
+      assert.equal(corrob.scoreBreakdown.locationConsistencyScore, 15);
+    }),
+
+    test('PHASE9-038: Temporal consistency scoring (<= 30m vs <= 120m vs > 120m)', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const now = new Date();
+      const inc = incidentService.createIncident({
+        title: 'Temporal Test',
+        description: 'Testing time delta tiers'
+      });
+      inc.createdAt = now.toISOString();
+
+      // Fresh report within 10 minutes -> 10 pts
+      verificationService.addEvidence(inc.id, {
+        type: 'SECONDARY_INCIDENT_REPORT',
+        content: 'Fresh field report',
+        timestamp: new Date(now.getTime() - 10 * 60 * 1000).toISOString(),
+        independenceGroup: 'FRESH'
+      });
+
+      const corrob = verificationService.getCorroborationResult(inc.id);
+      assert.equal(corrob.timeAssessment.status, 'TEMPORAL_CONSISTENT');
+      assert.equal(corrob.scoreBreakdown.timeConsistencyScore, 10);
+    }),
+
+    test('PHASE9-039: Fact consistency scoring (Content consensus across reports)', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({
+        title: 'Substation Fire',
+        description: 'Arcing transformer'
+      });
+
+      verificationService.addEvidence(inc.id, {
+        type: 'SECONDARY_INCIDENT_REPORT',
+        content: 'Transformer fire at substation',
+        category: 'FIRE',
+        severity: 'P2',
+        independenceGroup: 'WITNESS-1'
+      });
+
+      verificationService.addEvidence(inc.id, {
+        type: 'SECONDARY_INCIDENT_REPORT',
+        content: 'Transformer on fire heavy smoke',
+        category: 'FIRE',
+        severity: 'P2',
+        independenceGroup: 'WITNESS-2'
+      });
+
+      const corrob = verificationService.getCorroborationResult(inc.id);
+      assert.equal(corrob.scoreBreakdown.factConsistencyScore, 15);
+      assert.equal(corrob.conflicts.length, 0);
+    }),
+
+    test('PHASE9-040: Conflict penalty application (Capped penalty reduction up to -30 pts)', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({
+        title: 'Multi-Conflict Event',
+        description: 'Multiple contradictory reports'
+      });
+
+      // Introduce severity conflict + location conflict
+      verificationService.addEvidence(inc.id, {
+        type: 'SECONDARY_INCIDENT_REPORT',
+        content: 'Minor event low priority',
+        severity: 'P4',
+        latitude: 28.1000,
+        longitude: 77.1000,
+        independenceGroup: 'G1'
+      });
+
+      verificationService.addEvidence(inc.id, {
+        type: 'SECONDARY_INCIDENT_REPORT',
+        content: 'Mass casualty critical disaster',
+        severity: 'P1',
+        latitude: 28.9000,
+        longitude: 77.9000,
+        independenceGroup: 'G2'
+      });
+
+      const corrob = verificationService.getCorroborationResult(inc.id);
+      assert.ok(corrob.scoreBreakdown.conflictPenalty > 0);
+      assert.ok(corrob.scoreBreakdown.conflictPenalty <= 30);
+    }),
+
+    test('PHASE9-041: API Authorization: GET /api/corroboration/:id requires auth', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      db.insertUser({ id: 'admin-1', name: 'Admin', email: 'admin@test.org', role: 'ADMIN', passwordHash: 'hash', salt: 'salt', disabled: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+      const inc = incidentService.createIncident({
+        title: 'API Auth Test',
+        description: 'Testing 401 unauthenticated block'
+      });
+
+      const getRoute = (corroborationRoutes.stack as any[]).find((layer: any) => layer.route && layer.route.path === '/:incidentId' && layer.route.methods.get);
+      assert.ok(getRoute, 'GET /:incidentId route layer must exist');
+
+      // Unauthenticated request -> expect 401
+      const reqUnauth = mockReqRes({ params: { incidentId: inc.id } });
+      getRoute.route.stack[0].handle(reqUnauth.req, reqUnauth.res, () => {});
+      assert.equal(reqUnauth.getStatus(), 401);
+
+      // Authenticated request -> expect 200
+      const token = authService.generateToken({ id: 'admin-1', role: 'ADMIN', email: 'admin@test.org', name: 'Admin' } as any);
+      const reqAuth = mockReqRes({
+        headers: { authorization: `Bearer ${token}` },
+        params: { incidentId: inc.id }
+      });
+
+      reqAuth.req.user = { userId: 'admin-1', role: 'ADMIN', email: 'admin@test.org', name: 'Admin' };
+      getRoute.route.stack[1].handle(reqAuth.req, reqAuth.res, () => {});
+      assert.equal(reqAuth.getStatus(), 200);
+    }),
+
+    test('PHASE9-042: API Authorization: POST /api/corroboration/:id/evidence requires authentication and active user account', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      db.insertUser({ id: 'disabled-1', name: 'Disabled User', email: 'disabled@test.org', role: 'OPERATOR', passwordHash: 'hash', salt: 'salt', disabled: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+      const inc = incidentService.createIncident({
+        title: 'Evidence RBAC Test',
+        description: 'Testing role permission checks'
+      });
+
+      const postRoute = (corroborationRoutes.stack as any[]).find((layer: any) => layer.route && layer.route.path === '/:incidentId/evidence' && layer.route.methods.post);
+      assert.ok(postRoute, 'POST /:incidentId/evidence route layer must exist');
+
+      // Unauthenticated -> 401
+      const reqUnauth = mockReqRes({ params: { incidentId: inc.id } });
+      postRoute.route.stack[0].handle(reqUnauth.req, reqUnauth.res, () => {});
+      assert.equal(reqUnauth.getStatus(), 401);
+
+      // Disabled user account -> 403 Forbidden
+      const tokenDisabled = authService.generateToken({ id: 'disabled-1', role: 'OPERATOR', email: 'disabled@test.org', name: 'Disabled User' } as any);
+      const reqDisabled = mockReqRes({
+        headers: { authorization: `Bearer ${tokenDisabled}` },
+        params: { incidentId: inc.id },
+        body: { type: 'SECONDARY_INCIDENT_REPORT', content: 'Disabled report submission' }
+      });
+
+      postRoute.route.stack[0].handle(reqDisabled.req, reqDisabled.res, () => {
+        postRoute.route.stack[1].handle(reqDisabled.req, reqDisabled.res, () => {});
+      });
+      assert.equal(reqDisabled.getStatus(), 403);
+    }),
+
+    test('PHASE9-043: API Authorization: POST /api/corroboration/:id/verify requires ADMIN or DISPATCHER', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      db.insertUser({ id: 'op-1', name: 'Operator', email: 'op@test.org', role: 'OPERATOR', passwordHash: 'hash', salt: 'salt', disabled: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+      db.insertUser({ id: 'admin-1', name: 'Admin', email: 'admin@test.org', role: 'ADMIN', passwordHash: 'hash', salt: 'salt', disabled: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+      const inc = incidentService.createIncident({
+        title: 'Verify RBAC Test',
+        description: 'Testing manual verify endpoint roles'
+      });
+
+      const verifyRoute = (corroborationRoutes.stack as any[]).find((layer: any) => layer.route && layer.route.path === '/:incidentId/verify' && layer.route.methods.post);
+      assert.ok(verifyRoute, 'POST /:incidentId/verify route layer must exist');
+
+      // Operator role -> 403
+      const tokenOp = authService.generateToken({ id: 'op-1', role: 'OPERATOR', email: 'op@test.org', name: 'Operator' } as any);
+      const reqOp = mockReqRes({
+        headers: { authorization: `Bearer ${tokenOp}` },
+        params: { incidentId: inc.id },
+        body: { targetStatus: 'CONFIRMED' }
+      });
+
+      verifyRoute.route.stack[0].handle(reqOp.req, reqOp.res, () => {
+        verifyRoute.route.stack[1].handle(reqOp.req, reqOp.res, () => {});
+      });
+      assert.equal(reqOp.getStatus(), 403);
+
+      // Admin role -> Allowed (200)
+      const tokenAdmin = authService.generateToken({ id: 'admin-1', role: 'ADMIN', email: 'admin@test.org', name: 'Admin' } as any);
+      const reqAdmin = mockReqRes({
+        headers: { authorization: `Bearer ${tokenAdmin}` },
+        params: { incidentId: inc.id },
+        body: { targetStatus: 'CONFIRMED', notes: 'Verified by Chief' }
+      });
+      reqAdmin.req.user = { userId: 'admin-1', role: 'ADMIN', email: 'admin@test.org', name: 'Admin' };
+
+      verifyRoute.route.stack[0].handle(reqAdmin.req, reqAdmin.res, () => {
+        verifyRoute.route.stack[1].handle(reqAdmin.req, reqAdmin.res, () => {
+          verifyRoute.route.stack[2].handle(reqAdmin.req, reqAdmin.res, () => {});
+        });
+      });
+      assert.equal(reqAdmin.getStatus(), 200);
+    }),
+
+    test('PHASE9-044: Audit logging of evidence submissions, recalculations, and manual verifications', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({
+        title: 'Audit Trail Test',
+        description: 'Verifying audit trail entries'
+      });
+
+      const initialAuditCount = db.getAuditLogs().length;
+
+      verificationService.addEvidence(inc.id, {
+        type: 'SECONDARY_INCIDENT_REPORT',
+        content: 'Audited evidence submission'
+      }, {
+        userId: 'admin-1',
+        role: 'ADMIN',
+        name: 'Admin'
+      });
+
+      verificationService.manuallyVerify(inc.id, 'CONFIRMED', 'Audited confirmation', {
+        userId: 'admin-1',
+        role: 'ADMIN',
+        name: 'Admin'
+      });
+
+      const logsAfter = db.getAuditLogs();
+      assert.ok(logsAfter.length >= initialAuditCount + 2, 'Audit logs must record evidence submission and manual verification');
+      assert.ok(logsAfter.some(l => l.action === 'EVIDENCE_SUBMITTED'));
+      assert.ok(logsAfter.some(l => l.action === 'INCIDENT_VERIFICATION_MUTATED'));
+    }),
+
+    test('PHASE9-045: Offline operation invariant: Full corroboration pipeline executes with zero external network connectivity', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({
+        title: 'Offline Zero-Cloud Incident',
+        description: 'Isolated disaster field deployment',
+        latitude: 28.6139,
+        longitude: 77.2090
+      });
+
+      // Ensure initial report evidence is seeded
+      verificationService.getEvidenceForIncident(inc.id);
+
+      // Submit multiple evidence items offline
+      verificationService.addEvidence(inc.id, {
+        type: 'MESH_OBSERVATION',
+        content: 'Mesh Node M-1 telemetry confirmed structural damage',
+        latitude: 28.6140,
+        longitude: 77.2091,
+        independenceGroup: 'MESH-NODE-1'
+      });
+
+      verificationService.addEvidence(inc.id, {
+        type: 'RESPONDER_CONFIRMATION',
+        content: 'Engine 1 on scene confirming perimeter evacuation complete',
+        latitude: 28.6139,
+        longitude: 77.2090,
+        independenceGroup: 'RESPONDER-E1'
+      });
+
+      const corrob = verificationService.getCorroborationResult(inc.id);
+
+      assert.equal(corrob.verificationStatus, 'RESPONDER_VERIFIED');
+      assert.ok(corrob.corroborationScore >= 75);
+      assert.equal(corrob.independentSourceCount, 3); // Initial + Mesh + Responder
+      assert.ok(corrob.disclaimer.includes('Decision support reference only'));
     })
   ];
 

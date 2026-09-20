@@ -21,7 +21,8 @@ SentinelGrid is designed to continue operating without internet, cellular connec
    - **Phase 6 & 6.1 & 6.1.1 (Completed & Hardened)**: Offline Dispatch, Responder Workflows & Authoritative Ownership Hardening — Real-time state machine transitions, strict server-side owner validation for responders, standard HTTP status alignment, robust input safeguards, and full regression testing suite.
    - **Phase 7 (Completed & Hardened)**: Offline Operational GIS & Map Expansion — Extended 25-node, 35-road synthetic topology, 8 operational layers, multi-mode routing comparison (FASTEST, SAFEST, BALANCED), operational overlay mapping with location-unavailable handling, diagnostic telemetry, and RBAC-protected map management.
    - **Phase 8 & 8.1 (Completed & Hardened)**: Offline Emergency Knowledge Base & Deterministic Local RAG — 25-document local corpus (v1.0.0), deterministic weighted lexical retrieval, evidence traceability, conflict detection, human-review gates, local demonstration provenance, protocol versioning, RBAC-protected endpoints, and zero cloud AI/vector DB dependencies.
-   - **Future Roadmap (Phase 9+ — Not Implemented / Out of Scope)**: Phase 9 Incident Corroboration & Verification, Phase 10 Operations Analytics, real Meshtastic/LoRa physical hardware transceivers, satellite failover, and acoustic detection.
+   - **Phase 9 (Completed & Hardened)**: Incident Corroboration & Evidence Fusion — Multi-source evidence aggregation, deterministic multi-factor corroboration scoring (0–100), duplicate mesh packet deduplication & fingerprinting, 7-type evidence conflict detection, strict non-mutation safety invariants, human review gate triggers, audit logging, and RBAC-protected APIs.
+   - **Future Roadmap (Phase 10+ — Not Implemented / Out of Scope)**: Phase 10 Operations Analytics, real Meshtastic/LoRa physical hardware transceivers, satellite failover, and acoustic detection.
 
 ---
 
@@ -100,6 +101,79 @@ SentinelGrid implements a 100% offline, deterministic Retrieval-Augmented Genera
 1. **Advisory Decision Support**: The RAG subsystem is designed as an operational job aid for incident commanders and field teams. It does not replace licensed medical training, certified HazMat specialists, or incident commander authority.
 2. **Local Demonstration Provenance**: The default 25-document emergency corpus is configured as a demonstration and baseline disaster reference. It does not claim clinical certification or official government endorsement.
 3. **Lexical Matching Constraints**: The engine uses deterministic weighted lexical retrieval. Queries phrased with terminology completely unrepresented in document keywords or text will correctly return `INSUFFICIENT_LOCAL_EVIDENCE`.
+
+---
+
+## Phase 9 — Incident Corroboration & Evidence Fusion
+
+SentinelGrid implements a 100% offline, deterministic Incident Corroboration and Evidence Fusion Engine designed to synthesize heterogeneous disaster reports (Responders, Staged Resources, Mesh Network Observations, Public/Community Reports, AI Triage, and RAG Knowledge) into a unified, transparent Corroboration Score (0–100) and authoritative Verification Status.
+
+### Multi-Factor Deterministic Scoring Model (0–100 Points)
+The corroboration engine evaluates 6 distinct sub-scores plus conflict penalties without external network calls or `Math.random()` dependencies:
+1. **Source Reliability Score (0–25 pts)**: Evaluates the authoritative weight of the highest-quality reporter (`RESPONDER_CONFIRMATION` = 25, `RESPONDER_OBSERVATION` = 22, `RESOURCE_OBSERVATION` = 20, `MESH_OBSERVATION` = 18, `SECONDARY_REPORT` = 16, `INITIAL_REPORT` = 15, `AI_TRIAGE` = 10, `RAG_KNOWLEDGE` = 5).
+2. **Directness Score (0–15 pts)**: Rewards direct physical scene observations (Responder on scene = 15 pts, Mesh/Public field witness = 10 pts, Derived/AI = 5 pts).
+3. **Source Independence Score (0–20 pts)**: Rewards corroboration across independent reporting source groups (1 group = 0 pts, 2 groups = 10 pts, 3 groups = 15 pts, 4+ groups = 20 pts).
+4. **Location Consistency Score (0–15 pts)**: Evaluates Haversine spatial proximity between reported evidence coordinates and incident location (<= 500m = 15 pts, <= 2000m = 10 pts, > 2000m = 0 pts).
+5. **Temporal Consistency Score (0–15 pts)**: Measures report freshness against incident creation timestamp (<= 30 mins = 15 pts, <= 120 mins = 10 pts, > 120 mins = 5 pts).
+6. **Fact Consistency Score (0–10 pts)**: Analyzes content consensus across reporting text and category tags (Consensus = 10 pts, Minor variance = 5 pts, Discrepancy = 0 pts).
+7. **Conflict Penalty (0 to -30 pts)**: Deducts points based on active evidence conflict severity (CRITICAL = -15 pts, HIGH = -10 pts, MEDIUM = -5 pts, LOW = -2 pts, capped at -30 pts total penalty).
+
+### Corroboration Verification Lifecycle States
+- **`UNVERIFIED`**: Default state when no valid evidence items exist for an incident.
+- **`REPORTED`**: Single initial community or public report recorded.
+- **`AI_TRIAGED`**: AI Triage advisory classification processed without independent field corroboration.
+- **`CORROBORATED`**: High corroboration score (>= 60) backed by 2 or more independent field witness sources without critical conflicts.
+- **`RESPONDER_VERIFIED`**: Direct physical scene confirmation submitted by a verified field responder unit.
+- **`CONFIRMED`**: Explicit manual verification set by an authorized Human Incident Commander (`ADMIN` or `DISPATCHER`).
+- **`CONFLICTING`**: Automatic state when high-severity or critical evidence discrepancies are detected across reports.
+- **`DISPUTED`**: Manual status set by an Incident Commander when field reports are formally disputed.
+
+### Duplicate Mesh Packet Deduplication & Fingerprinting
+- **SHA-256 Payload Fingerprinting**: Generates a deterministic hash from `incidentId`, `type`, `sourceId`, normalized text content, and rounded location coordinates.
+- **Mesh Retransmission Safeguard**: Duplicate mesh packets or repeated submissions with identical fingerprints are flagged as `isDuplicate: true` and excluded from source independence counting to prevent artificial inflation of corroboration scores.
+
+### 7-Type Evidence Conflict Detection Engine
+Automatically scans evidence streams for material discrepancies:
+1. `CATEGORY_CONFLICT`: Mismatched core incident types (e.g. `FIRE` vs `FLOOD`).
+2. `SEVERITY_CONFLICT`: Discrepancy between reported severity tiers (e.g. `P1` vs `P4`).
+3. `HAZARD_CONFLICT`: Opposing hazard claims (e.g. `HAZMAT` vs `NO_HAZARD`).
+4. `LOCATION_CONFLICT`: Spatial distance exceeding `2000m` threshold between reports.
+5. `TIME_CONFLICT`: Temporal lag exceeding `120 minutes` between report timestamps.
+6. `VICTIM_COUNT_CONFLICT`: Discrepancy exceeding 3 victims between responder-verified counts and unverified estimates.
+7. `STATUS_CONFLICT`: Discrepancy between active scene reports and claims of containment (`CONTAINED`/`RESOLVED`).
+
+### Strict Non-Mutation Safety Invariants (Human-in-the-Loop)
+To prevent autonomous action risks, Phase 9 strictly enforces human-authoritative boundaries:
+- **No Auto-Resolution**: Corroboration NEVER automatically resolves or closes an incident.
+- **No Auto-Dispatch**: Corroboration NEVER automatically dispatches emergency resources.
+- **No Auto-Cancellation**: Corroboration NEVER automatically cancels existing dispatches.
+- **No Auto-Resource Status Mutation**: Corroboration NEVER alters resource availability states (`AVAILABLE`, `ASSIGNED`, `EN_ROUTE`, etc.).
+- **No Auto-Victim Count Verification**: Unverified public estimates are never automatically marked as responder-verified victim counts.
+- **No Auto-Incident Confirmation**: Corroboration NEVER sets incident status to `CONFIRMED` without human decision or direct responder on-scene observation.
+- **No Overriding Responder Observations**: Algorithmic scoring NEVER overwrites or suppresses physical responder scene reports.
+
+### Mandatory Human Review Gate Triggers
+Automatically flags `requiresHumanReview: true` when any of the following conditions are met:
+- Active evidence conflicts detected (`conflictCount > 0`).
+- Single reporting source with no independent witness corroboration (`independentSourceCount < 2`).
+- Low corroboration score (`corroborationScore < 40`).
+- Critical / P1 priority incidents (`severity === 'CRITICAL'` or `'P1'`).
+- Chemical, hazmat, collapse, or explosion hazards present.
+- Discrepancy between estimated and responder-verified victim counts.
+- Derived-only evidence present without direct physical field reports.
+
+### Corroboration Subsystem API Endpoints
+
+| Method | Endpoint | Description | Access / RBAC |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/corroboration/:id` | Retrieve complete corroboration score, breakdown, evidence items, conflicts, and human review status | Authenticated (`ADMIN`, `DISPATCHER`, `OPERATOR`, `RESPONDER`) |
+| `POST` | `/api/corroboration/:id/evidence` | Submit new evidence item (Responder observation, mesh report, public update) | Authenticated (`ADMIN`, `DISPATCHER`, `OPERATOR`, `RESPONDER`) |
+| `POST` | `/api/corroboration/:id/verify` | Apply authoritative human verification override (`CONFIRMED` or `DISPUTED`) | `ADMIN` or `DISPATCHER` only |
+
+### Operational Disclaimers & Limitations
+1. **Decision-Support Tool**: The corroboration engine is an advisory decision-support system. It provides transparent evidence synthesis for incident commanders and does not act autonomously.
+2. **Deterministic Heuristics**: Scoring models rely on deterministic mathematical rules and server-authoritative roles. They do not claim clinical validation, 100% statistical accuracy, or zero false positive guarantees.
+3. **Local Scope**: All evidence aggregation, deduplication, and scoring execute 100% locally on the host system with zero cloud API or external service dependencies.
 
 ---
 
@@ -319,12 +393,12 @@ During future physical hardware integration phases, radio frequency selection an
 
 All authorization checks in SentinelGrid are strictly enforced **server-side**:
 
-| Role | Incident Creation | Incident Status Update | AI Triage | Resource Match/Alloc | Dispatch Create/Reassign | Dispatch Status Update | Map Routing & Overlays | Map Hazard/Block Mgmt | RAG Knowledge Query | Knowledge Protocol Mgmt | User Management | Mesh Simulation | System Diagnostics |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **ADMIN** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **DISPATCHER** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ (403) | ❌ (403) | ✅ | ❌ (403) |
-| **RESPONDER** | ❌ (403) | ✅ | ❌ (403) | ❌ (403) | ❌ (403) | ✅ (Assigned Only) | ✅ | ❌ (403) | ✅ | ❌ (403) | ❌ (403) | ❌ (403) | ❌ (403) |
-| **OPERATOR** | ✅ | ❌ (403) | ✅ | ✅ | ❌ (403) | ❌ (403) | ✅ | ✅ | ✅ | ❌ (403) | ❌ (403) | ❌ (403) | ❌ (403) |
+| Role | Incident Creation | Incident Status Update | AI Triage | Resource Match/Alloc | Dispatch Create/Reassign | Dispatch Status Update | Map Routing & Overlays | Map Hazard/Block Mgmt | RAG Knowledge Query | Knowledge Protocol Mgmt | Corroboration Query | Corroboration Override | User Management | Mesh Simulation | System Diagnostics |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **ADMIN** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **DISPATCHER** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ (403) | ✅ | ✅ | ❌ (403) | ✅ | ❌ (403) |
+| **RESPONDER** | ❌ (403) | ✅ | ❌ (403) | ❌ (403) | ❌ (403) | ✅ (Assigned Only) | ✅ | ❌ (403) | ✅ | ❌ (403) | ✅ | ❌ (403) | ❌ (403) | ❌ (403) | ❌ (403) |
+| **OPERATOR** | ✅ | ❌ (403) | ✅ | ✅ | ❌ (403) | ❌ (403) | ✅ | ✅ | ✅ | ❌ (403) | ✅ | ❌ (403) | ❌ (403) | ❌ (403) | ❌ (403) |
 
 ### Initial Account Bootstrap & Credential Model
 - **Zero Default Passwords**: SentinelGrid never ships with insecure hardcoded default credentials (e.g. no `admin/admin`).

@@ -11,6 +11,7 @@ import routingRoutes from './server/routes/routingRoutes.ts';
 import dispatchRoutes from './server/routes/dispatchRoutes.ts';
 import mapRoutes from './server/routes/mapRoutes.ts';
 import knowledgeRoutes from './server/routes/knowledgeRoutes.ts';
+import corroborationRoutes from './server/routes/corroborationRoutes.ts';
 
 const PORT = Number(process.env.PORT) || 3000;
 
@@ -48,6 +49,7 @@ async function startServer() {
   app.use('/api/map', mapRoutes);
   app.use('/api/knowledge', knowledgeRoutes);
   app.use('/api/rag', knowledgeRoutes);
+  app.use('/api/corroboration', corroborationRoutes);
 
   // Vite development integration vs production static serving
   if (process.env.NODE_ENV !== 'production') {

@@ -570,6 +570,7 @@ export interface Dispatch {
 }
 
 import { Hazard, BlockedRoad, RouteResult } from '../gis/types.ts';
+import { EvidenceItem, CorroborationResult } from '../corroboration/types.ts';
 
 export interface DatabaseSchema {
   version: number;
@@ -589,6 +590,8 @@ export interface DatabaseSchema {
   knowledgeDocuments: KnowledgeDocument[];
   auditLogs: AuditLog[];
   aiTriageRecords?: AIIncidentTriageRecord[];
+  evidenceItems?: EvidenceItem[];
+  corroborationResults?: CorroborationResult[];
   lastIncidentSequence?: Record<string, number>;
   revokedTokens?: string[];
   hazards?: Hazard[];

@@ -17,12 +17,14 @@ import {
   Brain,
   ChevronDown,
   ChevronUp,
-  Sparkles
+  Sparkles,
+  Scale
 } from 'lucide-react';
 import { Incident, IncidentSeverity, IncidentStatus, IncidentVerification } from '../types/index.ts';
 import { StatusBadge } from '../components/common/StatusBadge.tsx';
 import { EmptyState } from '../components/common/EmptyState.tsx';
 import { TriagePanel } from '../components/incidents/TriagePanel.tsx';
+import { EvidenceCorroborationPanel } from '../components/corroboration/EvidenceCorroborationPanel.tsx';
 
 interface IncidentsPageProps {
   token: string | null;
@@ -39,6 +41,7 @@ export const IncidentsPage: React.FC<IncidentsPageProps> = ({ token, onOpenRepor
   const [selectedVerification, setSelectedVerification] = useState<string>('ALL');
   const [meshBroadcastStatus, setMeshBroadcastStatus] = useState<{ id: string; status: string; hops?: number } | null>(null);
   const [expandedTriageId, setExpandedTriageId] = useState<string | null>(null);
+  const [expandedCorroborationId, setExpandedCorroborationId] = useState<string | null>(null);
 
   const canUpdateStatus = user?.role === 'ADMIN' || user?.role === 'DISPATCHER' || user?.role === 'RESPONDER';
   const canManageDemo = user?.role === 'ADMIN';
@@ -423,7 +426,10 @@ export const IncidentsPage: React.FC<IncidentsPageProps> = ({ token, onOpenRepor
                             {/* AI Triage Toggle Button */}
                             <button
                               type="button"
-                              onClick={() => setExpandedTriageId(isExpanded ? null : incident.id)}
+                              onClick={() => {
+                                setExpandedTriageId(isExpanded ? null : incident.id);
+                                if (!isExpanded) setExpandedCorroborationId(null);
+                              }}
                               title="Inspect or Execute AI-Assisted Triage"
                               className={`inline-flex items-center gap-1 px-2 py-1 border rounded text-[10px] font-mono transition-colors cursor-pointer ${
                                 isExpanded
@@ -433,6 +439,25 @@ export const IncidentsPage: React.FC<IncidentsPageProps> = ({ token, onOpenRepor
                             >
                               <Brain className="w-3 h-3 text-emerald-400" />
                               <span>AI Triage</span>
+                            </button>
+
+                            {/* Corroboration Toggle Button */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const isCorrobExpanded = expandedCorroborationId === incident.id;
+                                setExpandedCorroborationId(isCorrobExpanded ? null : incident.id);
+                                if (!isCorrobExpanded) setExpandedTriageId(null);
+                              }}
+                              title="Inspect Multi-Source Evidence & Corroboration Score"
+                              className={`inline-flex items-center gap-1 px-2 py-1 border rounded text-[10px] font-mono transition-colors cursor-pointer ${
+                                expandedCorroborationId === incident.id
+                                  ? 'bg-amber-950/80 text-amber-300 border-amber-700'
+                                  : 'bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-amber-300 border-slate-700'
+                              }`}
+                            >
+                              <Scale className="w-3 h-3 text-amber-400" />
+                              <span>Evidence & Corroboration</span>
                             </button>
 
                             {canSimulate && (
@@ -480,6 +505,22 @@ export const IncidentsPage: React.FC<IncidentsPageProps> = ({ token, onOpenRepor
                               incident={incident}
                               token={token}
                               canRunTriage={canRunTriage}
+                            />
+                          </td>
+                        </tr>
+                      )}
+
+                      {/* Expandable Evidence Corroboration Panel Row */}
+                      {expandedCorroborationId === incident.id && (
+                        <tr className="bg-slate-950/90 border-b border-slate-800">
+                          <td colSpan={8} className="p-4">
+                            <EvidenceCorroborationPanel
+                              incidentId={incident.id}
+                              currentUserRole={user?.role}
+                              currentUserId={user?.id}
+                              currentUserName={user?.name}
+                              token={token || undefined}
+                              onRefreshIncident={fetchIncidents}
                             />
                           </td>
                         </tr>

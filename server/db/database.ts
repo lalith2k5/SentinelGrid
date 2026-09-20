@@ -22,6 +22,7 @@ import {
 } from './schema.ts';
 import { Hazard, BlockedRoad, RouteResult } from '../gis/types.ts';
 import { DEFAULT_KNOWLEDGE_CORPUS } from '../knowledge/defaultCorpus.ts';
+import { EvidenceItem, CorroborationResult } from '../corroboration/types.ts';
 
 /**
  * Hash bearer tokens with SHA-256 for secure revoked token persistence.
@@ -166,7 +167,9 @@ function createInitialSchema(): DatabaseSchema {
     hazards: [],
     blockedRoads: [],
     routeHistory: [],
-    dispatches: []
+    dispatches: [],
+    evidenceItems: [],
+    corroborationResults: []
   };
 }
 
@@ -240,6 +243,8 @@ class LocalDatabase {
           this.data.blockedRoads = this.data.blockedRoads || [];
           this.data.routeHistory = this.data.routeHistory || [];
           this.data.dispatches = this.data.dispatches || [];
+          this.data.evidenceItems = this.data.evidenceItems || [];
+          this.data.corroborationResults = this.data.corroborationResults || [];
         } catch (parseErr) {
           console.warn('[SentinelGrid DB] Corrupted database JSON file detected. Creating backup and re-initializing clean database...', parseErr);
           try {
@@ -1304,6 +1309,64 @@ class LocalDatabase {
     this.data.knowledgeDocuments = [...DEFAULT_KNOWLEDGE_CORPUS];
     this.saveSync();
     return [...this.data.knowledgeDocuments];
+  }
+
+  // Phase 9: Evidence & Corroboration Database Methods
+  public getEvidenceItems(incidentId?: string): EvidenceItem[] {
+    this.data.evidenceItems = this.data.evidenceItems || [];
+    if (incidentId) {
+      return this.data.evidenceItems.filter(e => e.incidentId === incidentId);
+    }
+    return [...this.data.evidenceItems];
+  }
+
+  public findEvidenceById(id: string): EvidenceItem | undefined {
+    this.data.evidenceItems = this.data.evidenceItems || [];
+    return this.data.evidenceItems.find(e => e.id === id);
+  }
+
+  public findEvidenceByFingerprint(fingerprint: string): EvidenceItem | undefined {
+    this.data.evidenceItems = this.data.evidenceItems || [];
+    return this.data.evidenceItems.find(e => e.fingerprint === fingerprint);
+  }
+
+  public insertEvidenceItem(item: EvidenceItem): EvidenceItem {
+    this.assertOperational();
+    this.data.evidenceItems = this.data.evidenceItems || [];
+    this.data.evidenceItems.push(JSON.parse(JSON.stringify(item)));
+    this.saveSync();
+    return { ...item };
+  }
+
+  public updateEvidenceItem(id: string, updates: Partial<EvidenceItem>): EvidenceItem | undefined {
+    this.assertOperational();
+    this.data.evidenceItems = this.data.evidenceItems || [];
+    const idx = this.data.evidenceItems.findIndex(e => e.id === id);
+    if (idx === -1) return undefined;
+    this.data.evidenceItems[idx] = {
+      ...this.data.evidenceItems[idx],
+      ...updates
+    };
+    this.saveSync();
+    return { ...this.data.evidenceItems[idx] };
+  }
+
+  public getCorroborationResult(incidentId: string): CorroborationResult | undefined {
+    this.data.corroborationResults = this.data.corroborationResults || [];
+    return this.data.corroborationResults.find(c => c.incidentId === incidentId);
+  }
+
+  public saveCorroborationResult(result: CorroborationResult): CorroborationResult {
+    this.assertOperational();
+    this.data.corroborationResults = this.data.corroborationResults || [];
+    const idx = this.data.corroborationResults.findIndex(c => c.incidentId === result.incidentId);
+    if (idx !== -1) {
+      this.data.corroborationResults[idx] = JSON.parse(JSON.stringify(result));
+    } else {
+      this.data.corroborationResults.push(JSON.parse(JSON.stringify(result)));
+    }
+    this.saveSync();
+    return { ...result };
   }
 }
 
