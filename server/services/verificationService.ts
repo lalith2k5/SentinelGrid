@@ -139,13 +139,28 @@ export class VerificationService {
 
     const type: EvidenceType = data.type;
     const cleanContent = sanitizeEvidenceContent(data.content);
-    const sourceId = data.sourceId || actor?.userId || 'SYSTEM';
-    const sourceRole = actor?.role as any || data.sourceRole || 'PUBLIC_REPORTER';
-    const sourceDescription = data.sourceDescription || actor?.name || 'Field Witness';
+    
+    // Server-authoritative source identity for authenticated users
+    let sourceId: string;
+    let sourceRole: any;
+    let sourceDescription: string;
+
+    if (actor && actor.userId) {
+      sourceId = actor.userId;
+      sourceRole = actor.role || 'PUBLIC_REPORTER';
+      sourceDescription = data.sourceDescription || actor.name || `User ${actor.userId}`;
+    } else {
+      sourceId = data.sourceId || 'SYSTEM';
+      sourceRole = data.sourceRole || 'PUBLIC_REPORTER';
+      sourceDescription = data.sourceDescription || 'Field Witness';
+    }
+
     const timestamp = data.timestamp || new Date().toISOString();
 
     const lat = data.latitude !== undefined && data.latitude !== null ? Number(data.latitude) : (incident.location?.latitude ?? null);
     const lon = data.longitude !== undefined && data.longitude !== null ? Number(data.longitude) : (incident.location?.longitude ?? null);
+
+    const packetId = data.packetId || data.meshPacketId || data.messageId || data.originPacketId || data.metadata?.packetId || data.metadata?.meshPacketId || null;
 
     const fingerprint = createEvidenceFingerprint({
       incidentId,
@@ -154,7 +169,8 @@ export class VerificationService {
       content: cleanContent,
       latitude: lat,
       longitude: lon,
-      timestamp
+      timestamp,
+      packetId
     });
 
     const existingDuplicate = db.findEvidenceByFingerprint(fingerprint);

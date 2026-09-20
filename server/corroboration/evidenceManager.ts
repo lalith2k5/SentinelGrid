@@ -14,7 +14,13 @@ export function createEvidenceFingerprint(params: {
   latitude?: number | null;
   longitude?: number | null;
   timestamp?: string;
+  packetId?: string | null;
 }): string {
+  if (params.packetId && String(params.packetId).trim().length > 0) {
+    const rawKey = `MESH_PACKET|${params.incidentId}|${String(params.packetId).trim()}`;
+    return crypto.createHash('sha256').update(rawKey).digest('hex');
+  }
+
   const normContent = (params.content || '').trim().toLowerCase().replace(/\s+/g, ' ');
   const latStr = params.latitude !== undefined && params.latitude !== null ? params.latitude.toFixed(4) : '';
   const lonStr = params.longitude !== undefined && params.longitude !== null ? params.longitude.toFixed(4) : '';

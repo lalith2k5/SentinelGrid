@@ -444,6 +444,29 @@ export const EvidenceCorroborationPanel: React.FC<EvidenceCorroborationPanelProp
         </div>
       )}
 
+      {/* Active Evidence Conflicts List Banner */}
+      {result.conflicts && result.conflicts.length > 0 && (
+        <div className="bg-red-950/40 border border-red-700/60 rounded-lg p-4 space-y-2">
+          <div className="flex items-center gap-2 text-red-400 font-bold text-sm">
+            <AlertTriangle className="w-4 h-4 text-red-400" />
+            <span>Active Evidence Conflicts ({result.conflicts.length})</span>
+          </div>
+          <div className="space-y-2 text-xs">
+            {result.conflicts.map((conf) => (
+              <div key={conf.id} className="bg-slate-950/80 border border-red-900/50 p-2.5 rounded text-slate-200">
+                <div className="flex items-center justify-between font-bold text-red-300 mb-1">
+                  <span>⚠ {conf.type.replace(/_/g, ' ')}</span>
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 bg-red-900/60 rounded uppercase">
+                    {conf.severity}
+                  </span>
+                </div>
+                <p className="text-slate-300">{conf.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* 4 Assessments Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Location Assessment */}

@@ -104,7 +104,7 @@ SentinelGrid implements a 100% offline, deterministic Retrieval-Augmented Genera
 
 ---
 
-## Phase 9 — Incident Corroboration & Evidence Fusion
+### Phase 9 & 9.1 — Incident Corroboration & Evidence Fusion Hardening
 
 SentinelGrid implements a 100% offline, deterministic Incident Corroboration and Evidence Fusion Engine designed to synthesize heterogeneous disaster reports (Responders, Staged Resources, Mesh Network Observations, Public/Community Reports, AI Triage, and RAG Knowledge) into a unified, transparent Corroboration Score (0–100) and authoritative Verification Status.
 
@@ -114,9 +114,19 @@ The corroboration engine evaluates 6 distinct sub-scores plus conflict penalties
 2. **Directness Score (0–15 pts)**: Rewards direct physical scene observations (Responder on scene = 15 pts, Mesh/Public field witness = 10 pts, Derived/AI = 5 pts).
 3. **Source Independence Score (0–20 pts)**: Rewards corroboration across independent reporting source groups (1 group = 0 pts, 2 groups = 10 pts, 3 groups = 15 pts, 4+ groups = 20 pts).
 4. **Location Consistency Score (0–15 pts)**: Evaluates Haversine spatial proximity between reported evidence coordinates and incident location (<= 500m = 15 pts, <= 2000m = 10 pts, > 2000m = 0 pts).
-5. **Temporal Consistency Score (0–15 pts)**: Measures report freshness against incident creation timestamp (<= 30 mins = 15 pts, <= 120 mins = 10 pts, > 120 mins = 5 pts).
-6. **Fact Consistency Score (0–10 pts)**: Analyzes content consensus across reporting text and category tags (Consensus = 10 pts, Minor variance = 5 pts, Discrepancy = 0 pts).
+5. **Temporal Consistency Score (0–10 pts)**: Measures report freshness against incident creation timestamp (<= 30 mins = 10 pts, <= 120 mins = 5 pts, > 120 mins = 0 pts).
+6. **Fact Consistency Score (0–15 pts)**: Analyzes content consensus across reporting text and category tags (Consensus = 15 pts, Minor variance = 8 pts, Discrepancy = 0 pts).
 7. **Conflict Penalty (0 to -30 pts)**: Deducts points based on active evidence conflict severity (CRITICAL = -15 pts, HIGH = -10 pts, MEDIUM = -5 pts, LOW = -2 pts, capped at -30 pts total penalty).
+
+> **DETERMINISM GUARANTEE**: Corroboration scoring is 100% deterministic and does not depend on `Math.random()`, floating point jitter, or external time servers.
+
+### Phase 9.1 Hardening & Security Patch Corrections
+- **Server-Authoritative Source Identity**: Disallows user-supplied `sourceId` or `sourceRole` overrides on authenticated evidence endpoints. Identity and role are strictly derived from the authenticated session context (`req.user`).
+- **Stable Packet Identity Deduplication**: Retransmitted mesh packets with matching stable packet identities (`meshPacketId`, `packetId`) are identified as duplicates (`isDuplicate: true`) regardless of varying arrival timestamps.
+- **Explicit Hazard Contradiction Engine**: Implements deterministic `HAZARD_CONFLICT` mapping for opposing hazard claims (e.g., `CHEMICAL` vs `NO_CHEMICAL`, `HAZMAT` vs `NO_HAZMAT`, `FIRE` vs `NO_FIRE`).
+- **Explicit Temporal Conflict Engine**: Triggers `TIME_CONFLICT` when evidence timestamps differ by > 120 minutes.
+- **High-Risk Human Review Gates**: Explicitly triggers mandatory human review (`requiresHumanReview: true`) for high-risk incident hazards including `CHEMICAL`, `HAZMAT`, and `STRUCTURAL_COLLAPSE`.
+- **Deterministic Conflict Ordering**: Conflicts are sorted deterministically by type, evidence ID A, and evidence ID B.
 
 ### Corroboration Verification Lifecycle States
 - **`UNVERIFIED`**: Default state when no valid evidence items exist for an incident.
@@ -129,14 +139,14 @@ The corroboration engine evaluates 6 distinct sub-scores plus conflict penalties
 - **`DISPUTED`**: Manual status set by an Incident Commander when field reports are formally disputed.
 
 ### Duplicate Mesh Packet Deduplication & Fingerprinting
-- **SHA-256 Payload Fingerprinting**: Generates a deterministic hash from `incidentId`, `type`, `sourceId`, normalized text content, and rounded location coordinates.
+- **SHA-256 Payload Fingerprinting**: Generates a deterministic hash from `packetId` (when present) or `incidentId`, `type`, `sourceId`, normalized text content, and rounded location coordinates.
 - **Mesh Retransmission Safeguard**: Duplicate mesh packets or repeated submissions with identical fingerprints are flagged as `isDuplicate: true` and excluded from source independence counting to prevent artificial inflation of corroboration scores.
 
 ### 7-Type Evidence Conflict Detection Engine
 Automatically scans evidence streams for material discrepancies:
 1. `CATEGORY_CONFLICT`: Mismatched core incident types (e.g. `FIRE` vs `FLOOD`).
 2. `SEVERITY_CONFLICT`: Discrepancy between reported severity tiers (e.g. `P1` vs `P4`).
-3. `HAZARD_CONFLICT`: Opposing hazard claims (e.g. `HAZMAT` vs `NO_HAZARD`).
+3. `HAZARD_CONFLICT`: Opposing hazard claims (e.g. `CHEMICAL` vs `NO_CHEMICAL`).
 4. `LOCATION_CONFLICT`: Spatial distance exceeding `2000m` threshold between reports.
 5. `TIME_CONFLICT`: Temporal lag exceeding `120 minutes` between report timestamps.
 6. `VICTIM_COUNT_CONFLICT`: Discrepancy exceeding 3 victims between responder-verified counts and unverified estimates.
@@ -158,7 +168,7 @@ Automatically flags `requiresHumanReview: true` when any of the following condit
 - Single reporting source with no independent witness corroboration (`independentSourceCount < 2`).
 - Low corroboration score (`corroborationScore < 40`).
 - Critical / P1 priority incidents (`severity === 'CRITICAL'` or `'P1'`).
-- Chemical, hazmat, collapse, or explosion hazards present.
+- Chemical (`CHEMICAL_HAZARD_REQUIRES_HUMAN_REVIEW`), HazMat (`HAZMAT_REQUIRES_HUMAN_REVIEW`), or structural collapse (`STRUCTURAL_COLLAPSE_REQUIRES_HUMAN_REVIEW`) hazards present.
 - Discrepancy between estimated and responder-verified victim counts.
 - Derived-only evidence present without direct physical field reports.
 

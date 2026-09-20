@@ -229,6 +229,39 @@ export function evaluateVictimCountAssessment(
   };
 }
 
+// Hazard Contradiction Map
+const HAZARD_CONTRADICTIONS: Record<string, string[]> = {
+  CHEMICAL: ['NO_CHEMICAL', 'NO_HAZARD', 'NO_CHEM'],
+  HAZMAT: ['NO_HAZMAT', 'NO_HAZARD'],
+  FIRE: ['NO_FIRE', 'NO_HAZARD'],
+  STRUCTURAL_COLLAPSE: ['NO_STRUCTURAL_COLLAPSE', 'NO_STRUCTURAL_HAZARD', 'NO_HAZARD'],
+  ELECTRICAL: ['NO_ELECTRICAL', 'NO_ELECTRICAL_HAZARD', 'NO_HAZARD'],
+  FLOOD: ['NO_FLOOD', 'NO_HAZARD'],
+  LANDSLIDE: ['NO_LANDSLIDE', 'NO_HAZARD']
+};
+
+function extractHazards(item: EvidenceItem): string[] {
+  const set = new Set<string>();
+  const hazList = item.hazards || item.structuredFacts?.hazards || [];
+  for (const h of hazList) {
+    if (typeof h === 'string' && h.trim()) {
+      set.add(h.trim().toUpperCase());
+    }
+  }
+  const txt = (item.content || '').toUpperCase();
+  if (set.size === 0) {
+    if (txt.includes('CHEMICAL')) set.add('CHEMICAL');
+    if (txt.includes('NO CHEMICAL') || txt.includes('NO_CHEMICAL') || txt.includes('NO HAZMAT')) set.add('NO_CHEMICAL');
+    if (txt.includes('HAZMAT')) set.add('HAZMAT');
+    if (txt.includes('NO HAZARD') || txt.includes('NO_HAZARD')) set.add('NO_HAZARD');
+    if (txt.includes('STRUCTURAL COLLAPSE') || txt.includes('STRUCTURAL_COLLAPSE')) set.add('STRUCTURAL_COLLAPSE');
+    if (txt.includes('NO COLLAPSE') || txt.includes('NO STRUCTURAL HAZARD')) set.add('NO_STRUCTURAL_HAZARD');
+    if (txt.includes('FIRE')) set.add('FIRE');
+    if (txt.includes('NO FIRE') || txt.includes('NO_FIRE')) set.add('NO_FIRE');
+  }
+  return Array.from(set);
+}
+
 /**
  * Conflict Detection Engine
  */
@@ -320,7 +353,48 @@ export function detectConflicts(
     }
   }
 
-  // 3. Location Conflict Detection
+  // 3. Hazard Conflict Detection
+  for (let i = 0; i < activeItems.length; i++) {
+    for (let j = i + 1; j < activeItems.length; j++) {
+      const itemA = activeItems[i];
+      const itemB = activeItems[j];
+      const hA = extractHazards(itemA);
+      const hB = extractHazards(itemB);
+
+      let contradictionFound = false;
+      for (const hz1 of hA) {
+        const contr1 = HAZARD_CONTRADICTIONS[hz1] || [];
+        for (const hz2 of hB) {
+          const contr2 = HAZARD_CONTRADICTIONS[hz2] || [];
+          if (contr1.includes(hz2) || contr2.includes(hz1)) {
+            contradictionFound = true;
+            break;
+          }
+        }
+        if (contradictionFound) break;
+      }
+
+      if (contradictionFound) {
+        const isHigh = hA.includes('CHEMICAL') || hA.includes('HAZMAT') || hB.includes('CHEMICAL') || hB.includes('HAZMAT');
+        conflicts.push({
+          id: `conf_haz_${itemA.id}_${itemB.id}`,
+          type: 'HAZARD_CONFLICT',
+          evidenceAId: itemA.id,
+          evidenceBId: itemB.id,
+          sourceA: itemA.sourceDescription || itemA.sourceId,
+          sourceB: itemB.sourceDescription || itemB.sourceId,
+          field: 'hazards',
+          valueA: hA,
+          valueB: hB,
+          description: `Hazard contradiction detected: ${itemA.sourceDescription || 'Source A'} reported [${hA.join(', ')}] while ${itemB.sourceDescription || 'Source B'} reported [${hB.join(', ')}].`,
+          severity: isHigh ? 'CRITICAL' : 'HIGH'
+        });
+        break;
+      }
+    }
+  }
+
+  // 4. Location Conflict Detection
   const geoItems = activeItems.filter(e => e.latitude !== null && e.latitude !== undefined && e.longitude !== null && e.longitude !== undefined);
   for (let i = 0; i < geoItems.length; i++) {
     for (let j = i + 1; j < geoItems.length; j++) {
@@ -346,7 +420,38 @@ export function detectConflicts(
     }
   }
 
-  // 4. Victim Count Conflict Detection
+  // 5. Time Conflict Detection (> 120 minutes timestamp difference)
+  for (let i = 0; i < activeItems.length; i++) {
+    for (let j = i + 1; j < activeItems.length; j++) {
+      const itemA = activeItems[i];
+      const itemB = activeItems[j];
+      if (itemA.timestamp && itemB.timestamp) {
+        const tA = new Date(itemA.timestamp).getTime();
+        const tB = new Date(itemB.timestamp).getTime();
+        if (!isNaN(tA) && !isNaN(tB)) {
+          const deltaMins = Math.round(Math.abs(tA - tB) / (1000 * 60));
+          if (deltaMins > 120) {
+            conflicts.push({
+              id: `conf_time_${itemA.id}_${itemB.id}`,
+              type: 'TIME_CONFLICT',
+              evidenceAId: itemA.id,
+              evidenceBId: itemB.id,
+              sourceA: itemA.sourceDescription || itemA.sourceId,
+              sourceB: itemB.sourceDescription || itemB.sourceId,
+              field: 'timestamp',
+              valueA: itemA.timestamp,
+              valueB: itemB.timestamp,
+              description: `Time conflict detected: Evidence timestamps differ by ${deltaMins} minutes (> 120 minutes threshold).`,
+              severity: deltaMins > 240 ? 'CRITICAL' : 'HIGH'
+            });
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  // 6. Victim Count Conflict Detection
   const victimAssessment = evaluateVictimCountAssessment(incident, activeItems);
   if (victimAssessment.hasConflict && victimAssessment.estimatedConsensus !== null && victimAssessment.verifiedCount !== null) {
     const itemA = activeItems.find(e => e.type === 'RESPONDER_CONFIRMATION' || e.type === 'RESPONDER_OBSERVATION') || activeItems[0];
@@ -367,7 +472,7 @@ export function detectConflicts(
     });
   }
 
-  // 5. Status Conflict Detection (e.g. CONTAINED vs ACTIVE_FIRE)
+  // 7. Status Conflict Detection (e.g. CONTAINED vs ACTIVE_FIRE)
   for (let i = 0; i < activeItems.length; i++) {
     for (let j = i + 1; j < activeItems.length; j++) {
       const itemA = activeItems[i];
@@ -399,6 +504,13 @@ export function detectConflicts(
       }
     }
   }
+
+  // Sort conflicts deterministically
+  conflicts.sort((a, b) => {
+    if (a.type !== b.type) return a.type.localeCompare(b.type);
+    if (a.evidenceAId !== b.evidenceAId) return a.evidenceAId.localeCompare(b.evidenceAId);
+    return a.evidenceBId.localeCompare(b.evidenceBId);
+  });
 
   return conflicts;
 }
@@ -652,6 +764,33 @@ export function evaluateHumanReviewGate(
   const victimEval = evaluateVictimCountAssessment(incident, activeItems);
   if (victimEval.hasConflict) {
     reasons.push('Discrepancy detected between estimated and responder-verified victim counts.');
+  }
+
+  // Check explicit high-risk hazard triggers (CHEMICAL, HAZMAT, STRUCTURAL_COLLAPSE)
+  const hazardTokens = new Set<string>();
+  if (incident.title) hazardTokens.add(incident.title.toUpperCase());
+  if (incident.description) hazardTokens.add(incident.description.toUpperCase());
+
+  for (const item of activeItems) {
+    if (item.content) hazardTokens.add(item.content.toUpperCase());
+    const hazList = item.hazards || item.structuredFacts?.hazards || [];
+    for (const h of hazList) {
+      if (typeof h === 'string') hazardTokens.add(h.toUpperCase());
+    }
+  }
+
+  const allHazardStr = Array.from(hazardTokens).join(' ');
+
+  if (allHazardStr.includes('CHEMICAL') || allHazardStr.includes('CHEMICAL_HAZARD')) {
+    reasons.push('CHEMICAL_HAZARD_REQUIRES_HUMAN_REVIEW: Chemical hazard present requiring human operational oversight.');
+  }
+
+  if (allHazardStr.includes('HAZMAT')) {
+    reasons.push('HAZMAT_REQUIRES_HUMAN_REVIEW: HazMat incident present requiring human operational oversight.');
+  }
+
+  if (allHazardStr.includes('STRUCTURAL_COLLAPSE') || allHazardStr.includes('STRUCTURAL COLLAPSE') || allHazardStr.includes('BUILDING COLLAPSE')) {
+    reasons.push('STRUCTURAL_COLLAPSE_REQUIRES_HUMAN_REVIEW: Structural collapse present requiring human operational oversight.');
   }
 
   return {

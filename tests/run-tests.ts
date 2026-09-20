@@ -7759,20 +7759,27 @@ async function runAllTests() {
 
       verificationService.addEvidence(inc.id, {
         type: 'SECONDARY_INCIDENT_REPORT',
-        content: 'Chlorine tanker rupture active toxic gas plume',
+        content: 'Chlorine tanker rupture active toxic gas plume chemical hazard',
         severity: 'P1',
+        hazards: ['CHEMICAL'],
         independenceGroup: 'HAZMAT-TEAM'
       });
 
       verificationService.addEvidence(inc.id, {
         type: 'SECONDARY_INCIDENT_REPORT',
-        content: 'Empty grain hopper cars minor derailment no hazmat present',
+        content: 'Empty grain hopper cars minor derailment no chemical hazard present',
         severity: 'P4',
+        hazards: ['NO_CHEMICAL'],
         independenceGroup: 'RAIL-OPERATOR'
       });
 
       const conflicts = verificationService.getConflicts(inc.id);
-      assert.ok(conflicts.length > 0, 'Conflict must be detected between toxic gas tanker and empty grain hopper reports');
+      const hazConflict = conflicts.find(c => c.type === 'HAZARD_CONFLICT');
+      assert.ok(hazConflict, 'HAZARD_CONFLICT must be detected when chemical and no chemical reports are submitted');
+      assert.equal(hazConflict.type, 'HAZARD_CONFLICT');
+
+      const corrob = verificationService.getCorroborationResult(inc.id);
+      assert.equal(corrob.requiresHumanReview, true, 'Hazard conflict must trigger human review gate');
     }),
 
     test('PHASE9-014: Location conflict detection (> 2000m distance threshold)', async () => {
@@ -7806,9 +7813,15 @@ async function runAllTests() {
         title: 'Flash Flood',
         description: 'Current culvert overflow'
       });
-      inc.createdAt = '2026-09-20T10:00:00Z';
 
-      // Evidence claiming report from 5 hours ago
+      verificationService.addEvidence(inc.id, {
+        type: 'SECONDARY_INCIDENT_REPORT',
+        content: 'Culvert flooding reported now',
+        timestamp: '2026-09-20T10:00:00Z',
+        independenceGroup: 'REPORTER-NOW'
+      });
+
+      // Evidence claiming report from 5 hours ago (300 minutes lag)
       verificationService.addEvidence(inc.id, {
         type: 'SECONDARY_INCIDENT_REPORT',
         content: 'Culvert was clear during morning inspection',
@@ -7816,8 +7829,14 @@ async function runAllTests() {
         independenceGroup: 'INSPECTOR'
       });
 
+      const conflicts = verificationService.getConflicts(inc.id);
+      const timeConflict = conflicts.find(c => c.type === 'TIME_CONFLICT');
+      assert.ok(timeConflict, 'TIME_CONFLICT must be detected when timestamps differ by > 120 minutes');
+      assert.equal(timeConflict.type, 'TIME_CONFLICT');
+
       const corrob = verificationService.getCorroborationResult(inc.id);
       assert.equal(corrob.timeAssessment.status, 'TEMPORAL_MISMATCH');
+      assert.equal(corrob.requiresHumanReview, true, 'Time conflict must trigger human review gate');
     }),
 
     test('PHASE9-016: Victim count conflict detection (Estimated vs Verified discrepancy)', async () => {
@@ -8597,6 +8616,219 @@ async function runAllTests() {
       assert.ok(corrob.corroborationScore >= 75);
       assert.equal(corrob.independentSourceCount, 3); // Initial + Mesh + Responder
       assert.ok(corrob.disclaimer.includes('Decision support reference only'));
+    }),
+
+    test('PHASE9-046: High-risk human review gate - Chemical hazard explicitly triggers human review', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({
+        title: 'Industrial Leak',
+        description: 'Chemical release in laboratory'
+      });
+
+      verificationService.addEvidence(inc.id, {
+        type: 'SECONDARY_INCIDENT_REPORT',
+        content: 'Corrosive chemical acid spill reported on floor 2',
+        hazards: ['CHEMICAL'],
+        independenceGroup: 'LAB-TECH'
+      });
+
+      const corrob = verificationService.getCorroborationResult(inc.id);
+      assert.equal(corrob.requiresHumanReview, true);
+      assert.ok(corrob.humanReviewReasons.some(r => r.includes('CHEMICAL_HAZARD_REQUIRES_HUMAN_REVIEW')));
+    }),
+
+    test('PHASE9-047: High-risk human review gate - HazMat incident explicitly triggers human review', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({
+        title: 'Highway Tanker Rollover',
+        description: 'HazMat tanker leaking fluid'
+      });
+
+      verificationService.addEvidence(inc.id, {
+        type: 'SECONDARY_INCIDENT_REPORT',
+        content: 'HazMat transport container damaged in highway rollover',
+        hazards: ['HAZMAT'],
+        independenceGroup: 'HIGHWAY-PATROL'
+      });
+
+      const corrob = verificationService.getCorroborationResult(inc.id);
+      assert.equal(corrob.requiresHumanReview, true);
+      assert.ok(corrob.humanReviewReasons.some(r => r.includes('HAZMAT_REQUIRES_HUMAN_REVIEW')));
+    }),
+
+    test('PHASE9-048: High-risk human review gate - Structural collapse explicitly triggers human review', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({
+        title: 'Parking Garage Failure',
+        description: 'Structural collapse on level 3'
+      });
+
+      verificationService.addEvidence(inc.id, {
+        type: 'SECONDARY_INCIDENT_REPORT',
+        content: 'Major structural collapse of concrete beam',
+        hazards: ['STRUCTURAL_COLLAPSE'],
+        independenceGroup: 'FACILITY-MGR'
+      });
+
+      const corrob = verificationService.getCorroborationResult(inc.id);
+      assert.equal(corrob.requiresHumanReview, true);
+      assert.ok(corrob.humanReviewReasons.some(r => r.includes('STRUCTURAL_COLLAPSE_REQUIRES_HUMAN_REVIEW')));
+    }),
+
+    test('PHASE9-049: Identity security - Authenticated user cannot spoof sourceId in payload', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({ title: 'Identity Test 1', description: 'Testing sourceId override' });
+
+      const item = verificationService.addEvidence(inc.id, {
+        type: 'SECONDARY_INCIDENT_REPORT',
+        content: 'Report with spoofed sourceId',
+        sourceId: 'SPOOFED_DISPATCHER_999'
+      }, {
+        userId: 'user_auth_123',
+        role: 'PUBLIC_REPORTER',
+        name: 'John Public'
+      });
+
+      assert.equal(item.evidence.sourceId, 'user_auth_123', 'sourceId MUST be locked to authenticated userId');
+    }),
+
+    test('PHASE9-050: Identity security - Authenticated user cannot spoof sourceRole in payload', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({ title: 'Identity Test 2', description: 'Testing sourceRole override' });
+
+      const item = verificationService.addEvidence(inc.id, {
+        type: 'SECONDARY_INCIDENT_REPORT',
+        content: 'Public trying to claim COMMANDER role',
+        sourceRole: 'ADMIN' as any
+      }, {
+        userId: 'user_auth_456',
+        role: 'PUBLIC_REPORTER',
+        name: 'Jane Citizen'
+      });
+
+      assert.equal(item.evidence.sourceRole, 'PUBLIC_REPORTER', 'sourceRole MUST be locked to authenticated user role');
+    }),
+
+    test('PHASE9-051: Identity security - Authenticated operator cannot create responder evidence via request body role', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({ title: 'Identity Test 3', description: 'Testing role spoofing' });
+
+      const item = verificationService.addEvidence(inc.id, {
+        type: 'RESPONDER_CONFIRMATION',
+        content: 'Operator pretending to be responder on scene',
+        sourceRole: 'RESPONDER' as any
+      }, {
+        userId: 'op_789',
+        role: 'OPERATOR',
+        name: 'Dispatch Operator'
+      });
+
+      assert.equal(item.evidence.sourceRole, 'OPERATOR', 'sourceRole MUST match actor role OPERATOR rather than payload role');
+    }),
+
+    test('PHASE9-052: Identity security - Legitimate responder confirmation uses authenticated identity', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({ title: 'Identity Test 4', description: 'Legitimate responder' });
+
+      const item = verificationService.addEvidence(inc.id, {
+        type: 'RESPONDER_CONFIRMATION',
+        content: 'Legitimate fire captain on scene confirmation',
+        verifiedVictimCount: 0
+      }, {
+        userId: 'resp_capt_1',
+        role: 'RESPONDER',
+        name: 'Capt. Miller'
+      });
+
+      assert.equal(item.evidence.sourceId, 'resp_capt_1');
+      assert.equal(item.evidence.sourceRole, 'RESPONDER');
+    }),
+
+    test('PHASE9-053: Deduplication - Mesh retransmission with stable packet identity is suppressed as duplicate', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({ title: 'Mesh Retransmission', description: 'Testing mesh packet deduplication' });
+
+      const pkt1 = verificationService.addEvidence(inc.id, {
+        type: 'MESH_OBSERVATION',
+        content: 'Mesh node report 101 telemetry',
+        meshPacketId: 'PKT-MESH-889911',
+        timestamp: '2026-09-20T10:00:00Z'
+      });
+
+      const pkt2 = verificationService.addEvidence(inc.id, {
+        type: 'MESH_OBSERVATION',
+        content: 'Mesh node report 101 telemetry - retransmitted with new ts',
+        meshPacketId: 'PKT-MESH-889911',
+        timestamp: '2026-09-20T10:05:00Z'
+      });
+
+      assert.equal(pkt1.evidence.isDuplicate, false);
+      assert.equal(pkt2.evidence.isDuplicate, true, 'Retransmission with same meshPacketId MUST be identified as duplicate');
+      assert.equal(pkt1.evidence.fingerprint, pkt2.evidence.fingerprint);
+    }),
+
+    test('PHASE9-054: Complete Seven Conflict Types coverage matrix', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+
+      // 1. CATEGORY_CONFLICT
+      const incCat = incidentService.createIncident({ title: 'Cat Incident', description: 'Detailed incident description' });
+      verificationService.addEvidence(incCat.id, { type: 'SECONDARY_INCIDENT_REPORT', content: 'Fire', category: 'FIRE', independenceGroup: 'G1' });
+      verificationService.addEvidence(incCat.id, { type: 'SECONDARY_INCIDENT_REPORT', content: 'Flood', category: 'FLOOD', independenceGroup: 'G2' });
+      const confCat = verificationService.getConflicts(incCat.id);
+      assert.ok(confCat.some(c => c.type === 'CATEGORY_CONFLICT'), 'CATEGORY_CONFLICT present');
+
+      // 2. SEVERITY_CONFLICT
+      const incSev = incidentService.createIncident({ title: 'Sev Incident', description: 'Detailed incident description' });
+      verificationService.addEvidence(incSev.id, { type: 'SECONDARY_INCIDENT_REPORT', content: 'Critical', severity: 'P1', independenceGroup: 'G1' });
+      verificationService.addEvidence(incSev.id, { type: 'SECONDARY_INCIDENT_REPORT', content: 'Low', severity: 'P4', independenceGroup: 'G2' });
+      const confSev = verificationService.getConflicts(incSev.id);
+      assert.ok(confSev.some(c => c.type === 'SEVERITY_CONFLICT'), 'SEVERITY_CONFLICT present');
+
+      // 3. HAZARD_CONFLICT
+      const incHaz = incidentService.createIncident({ title: 'Haz Incident', description: 'Detailed incident description' });
+      verificationService.addEvidence(incHaz.id, { type: 'SECONDARY_INCIDENT_REPORT', content: 'Chemical spill', hazards: ['CHEMICAL'], independenceGroup: 'G1' });
+      verificationService.addEvidence(incHaz.id, { type: 'SECONDARY_INCIDENT_REPORT', content: 'No chemical spill', hazards: ['NO_CHEMICAL'], independenceGroup: 'G2' });
+      const confHaz = verificationService.getConflicts(incHaz.id);
+      assert.ok(confHaz.some(c => c.type === 'HAZARD_CONFLICT'), 'HAZARD_CONFLICT present');
+
+      // 4. LOCATION_CONFLICT
+      const incLoc = incidentService.createIncident({ title: 'Loc Incident', description: 'Detailed incident description' });
+      verificationService.addEvidence(incLoc.id, { type: 'SECONDARY_INCIDENT_REPORT', content: 'Loc 1', latitude: 28.5, longitude: 77.1, independenceGroup: 'G1' });
+      verificationService.addEvidence(incLoc.id, { type: 'SECONDARY_INCIDENT_REPORT', content: 'Loc 2', latitude: 28.7, longitude: 77.4, independenceGroup: 'G2' });
+      const confLoc = verificationService.getConflicts(incLoc.id);
+      assert.ok(confLoc.some(c => c.type === 'LOCATION_CONFLICT'), 'LOCATION_CONFLICT present');
+
+      // 5. TIME_CONFLICT
+      const incTime = incidentService.createIncident({ title: 'Time Incident', description: 'Detailed incident description' });
+      verificationService.addEvidence(incTime.id, { type: 'SECONDARY_INCIDENT_REPORT', content: 'T1', timestamp: '2026-09-20T10:00:00Z', independenceGroup: 'G1' });
+      verificationService.addEvidence(incTime.id, { type: 'SECONDARY_INCIDENT_REPORT', content: 'T2', timestamp: '2026-09-20T05:00:00Z', independenceGroup: 'G2' });
+      const confTime = verificationService.getConflicts(incTime.id);
+      assert.ok(confTime.some(c => c.type === 'TIME_CONFLICT'), 'TIME_CONFLICT present');
+
+      // 6. VICTIM_COUNT_CONFLICT
+      const incVic = incidentService.createIncident({ title: 'Vic Incident', description: 'Detailed incident description' });
+      verificationService.addEvidence(incVic.id, { type: 'SECONDARY_INCIDENT_REPORT', content: '10 victims estimated', victimCount: 10, independenceGroup: 'G1' });
+      verificationService.responderConfirm(incVic.id, { notes: '0 verified', verifiedVictimCount: 0 }, { userId: 'r1', role: 'RESPONDER', name: 'Resp' });
+      const confVic = verificationService.getConflicts(incVic.id);
+      assert.ok(confVic.some(c => c.type === 'VICTIM_COUNT_CONFLICT'), 'VICTIM_COUNT_CONFLICT present');
+
+      // 7. STATUS_CONFLICT
+      const incStat = incidentService.createIncident({ title: 'Stat Incident', description: 'Detailed incident description' });
+      verificationService.addEvidence(incStat.id, { type: 'SECONDARY_INCIDENT_REPORT', content: 'Fire contained', structuredFacts: { status: 'CONTAINED' }, independenceGroup: 'G1' });
+      verificationService.addEvidence(incStat.id, { type: 'SECONDARY_INCIDENT_REPORT', content: 'Fire active spreading', structuredFacts: { status: 'ACTIVE_FIRE' }, independenceGroup: 'G2' });
+      const confStat = verificationService.getConflicts(incStat.id);
+      assert.ok(confStat.some(c => c.type === 'STATUS_CONFLICT'), 'STATUS_CONFLICT present');
+    }),
+
+    test('PHASE9-055: Conflict detection determinism - Identical conflict list across multiple evaluations', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const inc = incidentService.createIncident({ title: 'Determinism Incident', description: 'Detailed incident description' });
+      verificationService.addEvidence(inc.id, { type: 'SECONDARY_INCIDENT_REPORT', content: 'Fire', category: 'FIRE', independenceGroup: 'G1' });
+      verificationService.addEvidence(inc.id, { type: 'SECONDARY_INCIDENT_REPORT', content: 'Flood', category: 'FLOOD', independenceGroup: 'G2' });
+
+      const conf1 = verificationService.getConflicts(inc.id);
+      const conf2 = verificationService.getConflicts(inc.id);
+      assert.deepEqual(conf1, conf2, 'Conflict detection must be 100% deterministic');
     })
   ];
 
