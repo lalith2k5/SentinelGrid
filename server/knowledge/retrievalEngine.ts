@@ -99,7 +99,7 @@ export class LocalRetrievalEngine {
       const matchReasons: string[] = [];
       const matchedKeywordsSet = new Set<string>();
 
-      // 1. Keyword Overlap Scoring (BM25-style lexical frequency, max 40 pts)
+      // 1. Keyword Overlap Scoring (deterministic weighted lexical retrieval frequency, max 40 pts)
       const docKeywords = (doc.keywords || []).map(k => k.toLowerCase());
       const docTags = (doc.tags || []).map(t => t.toLowerCase());
       const titleTokens = tokenize(doc.title);

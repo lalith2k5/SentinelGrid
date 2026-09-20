@@ -20,7 +20,86 @@ SentinelGrid is designed to continue operating without internet, cellular connec
    - **Phase 5 & 5.1 & 5.1.1 (Completed & Hardened)**: Resource Matching & Allocation — Local multi-factor deterministic scoring, structured capacity verification by resource type, eligibility and routing safety checks, explainable resource recommendations, local stateful allocation & release, strict dispatcher/admin/operator RBAC limits, and audit logs.
    - **Phase 6 & 6.1 & 6.1.1 (Completed & Hardened)**: Offline Dispatch, Responder Workflows & Authoritative Ownership Hardening — Real-time state machine transitions, strict server-side owner validation for responders, standard HTTP status alignment, robust input safeguards, and full regression testing suite.
    - **Phase 7 (Completed & Hardened)**: Offline Operational GIS & Map Expansion — Extended 25-node, 35-road synthetic topology, 8 operational layers, multi-mode routing comparison (FASTEST, SAFEST, BALANCED), operational overlay mapping with location-unavailable handling, diagnostic telemetry, and RBAC-protected map management.
-   - **Future Roadmap (Phase 8+ — Not Implemented / Out of Scope)**: Phase 8 Offline Emergency Knowledge Base & RAG Vector Search, Phase 9 Incident Corroboration & Verification, Phase 10 Operations Analytics, real Meshtastic/LoRa physical hardware transceivers, satellite failover, and acoustic detection.
+   - **Phase 8 & 8.1 (Completed & Hardened)**: Offline Emergency Knowledge Base & Deterministic Local RAG — 25-document local corpus (v1.0.0), deterministic weighted lexical retrieval, evidence traceability, conflict detection, human-review gates, local demonstration provenance, protocol versioning, RBAC-protected endpoints, and zero cloud AI/vector DB dependencies.
+   - **Future Roadmap (Phase 9+ — Not Implemented / Out of Scope)**: Phase 9 Incident Corroboration & Verification, Phase 10 Operations Analytics, real Meshtastic/LoRa physical hardware transceivers, satellite failover, and acoustic detection.
+
+---
+
+## Phase 8 & 8.1 — Offline Emergency Knowledge Base & Deterministic Local RAG
+
+SentinelGrid implements a 100% offline, deterministic Retrieval-Augmented Generation (RAG) decision-support system designed to surface authoritative emergency operational manuals, safety precautions, and contraindications during disaster operations without cloud connectivity.
+
+### 25-Document Local Knowledge Corpus (v1.0.0)
+- **Baseline Coverage**: 25 pre-indexed, structured operational manuals spanning 12 critical emergency categories:
+  - `TRAUMA_BLEEDING`: Arterial/venous hemorrhage control, tourniquet application, and wound packing.
+  - `BURNS`: Thermal burn cooling, sterile dressing, and chemical burn irrigation.
+  - `FRACTURES`: Splinting, spinal immobilization, and neurovascular assessment.
+  - `RESPIRATORY`: Airway management, recovery position, and choking protocols.
+  - `CARDIAC`: CPR, chest compression rates, and AED deployment guidelines.
+  - `ENVIRONMENTAL`: Hypothermia passive/active rewarming and heat stroke rapid cooling.
+  - `NATURAL_FLOOD`: Flash flood vertical evacuation and swiftwater crossing safety.
+  - `NATURAL_FIRE`: Wildfire defensible space and structural protection.
+  - `STRUCTURAL_COLLAPSE`: Urban search and rescue (USAR) void assessment, marking, and crush syndrome management.
+  - `HAZMAT_CHEMICAL`: Isolation perimeters, decontamination, and agent-specific responses (anhydrous ammonia, chlorine gas, petroleum spills, lithium-ion battery fires, water-reactive chemicals).
+  - `ELECTRICAL_HAZARDS`: Downed power line clearance zones and step potential safety.
+  - `MASS_CASUALTY`: START / SALT triage protocols and color-coded casualty tagging.
+- **Corpus Version**: Authoritative baseline version `1.0.0` (Offline Core Baseline).
+- **Provenance Standard**: Marked as `LOCAL_DEMONSTRATION` provenance with source organizations and review metadata.
+
+### Deterministic Weighted Lexical Retrieval Engine
+- **Multi-Factor Deterministic Scoring**: Computes a transparent, reproducible relevance score (0–100) per document:
+  - **Lexical Keyword Overlap (max 40 pts)**: Evaluates normalized query tokens against document keywords, title, summary, and content.
+  - **Category Alignment (max 25 pts)**: Matches incident or query categories against document classifications.
+  - **Hazard Profile Correlation (max 20 pts)**: Correlates operational hazards (e.g. `FLOOD`, `CHEMICAL_SPILL`, `STRUCTURAL_COLLAPSE`) with manual hazard tags.
+  - **Severity & Urgency Calibration (max 10 pts)**: Calibrates high-priority (P1/P2) life threats against critical response procedures.
+  - **Symptom & Condition Tagging (max 10 pts)**: Matches clinical/field signs with protocol applicability.
+  - **Review Interval Penalty (-30%)**: Applies a 30% reduction penalty for protocols exceeding the 365-day review threshold.
+- **Secondary Deterministic Tie-Breaking**: Documents with identical scores are ordered deterministically by document ID.
+- **Zero Hallucination / Traceability**: Synthesized action checklists and safety precautions are strictly derived from matched documents with citations to document ID, version, and source.
+
+### Safety, Guardrails & Non-Mutation Invariants
+- **Conflict Detection**: Automatically scans matched manuals for conflicting directives (such as water suppression on water-reactive chemicals like Class D metals or sulfuric acid) and surfaces explicit warnings.
+- **Human Review Gates**: Flags mandatory human incident commander review for:
+  - P1 critical life-safety incidents.
+  - Low retrieval confidence (< 40 relevance score).
+  - Queries with matched outdated protocols (> 365 days since review).
+  - Dangerous chemical / hazardous materials procedures.
+- **Insufficient Evidence Handling**: When no document meets the minimum confidence threshold, returns `INSUFFICIENT_LOCAL_EVIDENCE` with clear guidance rather than inventing synthetic advice.
+- **Non-Mutation Invariant**: RAG queries are strictly read-only decision-support queries; they **NEVER** mutate incident status, severity, resources, or dispatch states.
+- **Mandatory Safety Disclaimer**: Every RAG output includes an explicit emergency operations disclaimer: *"Advisory emergency field reference only. Local commander judgment, responder scene safety, and trained personnel take precedence."*
+
+### Zero Cloud AI & Zero Vector Database Invariants
+- **No Cloud AI Dependency**: SentinelGrid RAG does not call Gemini, OpenAI, Claude, or any external LLM APIs.
+- **No Remote Vector Database**: Does not require Pinecone, Weaviate, Qdrant, Chroma, or Milvus. Operates entirely in-memory and local JSON persistence.
+- **100% Offline**: All tokenization, scoring, ranking, synthesis, conflict detection, and document management execute on local hardware without internet.
+
+### Knowledge Versioning & RBAC
+- **Semantic Protocol Versioning**: Administrators can publish new versions with structured changelogs, archiving prior versions in `versionHistory`.
+- **Status Lifecycle**: Documents transition across `ACTIVE`, `INACTIVE`, `ARCHIVED`, and `DRAFT` states. Inactive/archived documents are excluded from standard RAG retrieval.
+- **RBAC Policy**:
+  - `POST /api/knowledge/retrieve` & `POST /api/knowledge/query`: Requires authenticated user session (`ADMIN`, `DISPATCHER`, `OPERATOR`, `RESPONDER`).
+  - `POST /api/knowledge` (Create), `PUT /api/knowledge/:id` (Update), `POST /api/knowledge/:id/version` (Publish Version), `PATCH /api/knowledge/:id/status` (Status Mutation): Strictly restricted to `ADMIN` role.
+
+### Knowledge Subsystem API Endpoints
+
+| Method | Endpoint | Description | Access / RBAC |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/knowledge/status` | Subsystem operational status, corpus metadata, and offline guarantees | Public / Internal |
+| `GET` | `/api/knowledge/categories` | Categories with document counts and active counts | Public / Internal |
+| `GET` | `/api/knowledge/versions` | Corpus version metadata and document revision history | Public / Internal |
+| `GET` | `/api/knowledge` | List knowledge documents with category, hazard, status, and text search | Public / Internal |
+| `GET` | `/api/knowledge/:id` | Retrieve single knowledge document by ID | Public / Internal |
+| `POST` | `/api/knowledge/retrieve` | Execute deterministic RAG query with score breakdowns and checklists | Authenticated (`ADMIN`, `DISPATCHER`, `OPERATOR`, `RESPONDER`) |
+| `POST` | `/api/knowledge/query` | Alias for deterministic RAG query execution | Authenticated (`ADMIN`, `DISPATCHER`, `OPERATOR`, `RESPONDER`) |
+| `POST` | `/api/knowledge` | Register a new emergency protocol document | `ADMIN` only |
+| `PUT` | `/api/knowledge/:id` | Update an existing knowledge document | `ADMIN` only |
+| `POST` | `/api/knowledge/:id/version`| Publish a new SemVer version with audit changelog | `ADMIN` only |
+| `PATCH` | `/api/knowledge/:id/status` | Update document lifecycle status (`ACTIVE`, `INACTIVE`, `ARCHIVED`, `DRAFT`) | `ADMIN` only |
+
+### Known Limitations & Operational Disclaimers
+1. **Advisory Decision Support**: The RAG subsystem is designed as an operational job aid for incident commanders and field teams. It does not replace licensed medical training, certified HazMat specialists, or incident commander authority.
+2. **Local Demonstration Provenance**: The default 25-document emergency corpus is configured as a demonstration and baseline disaster reference. It does not claim clinical certification or official government endorsement.
+3. **Lexical Matching Constraints**: The engine uses deterministic weighted lexical retrieval. Queries phrased with terminology completely unrepresented in document keywords or text will correctly return `INSUFFICIENT_LOCAL_EVIDENCE`.
 
 ---
 
@@ -240,12 +319,12 @@ During future physical hardware integration phases, radio frequency selection an
 
 All authorization checks in SentinelGrid are strictly enforced **server-side**:
 
-| Role | Incident Creation | Incident Status Update | AI Triage | Resource Match/Alloc | Dispatch Create/Reassign | Dispatch Status Update | Map Routing & Overlays | Map Hazard/Block Mgmt | User Management | Mesh Simulation | System Diagnostics |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **ADMIN** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **DISPATCHER** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ (403) | ✅ | ❌ (403) |
-| **RESPONDER** | ❌ (403) | ✅ | ❌ (403) | ❌ (403) | ❌ (403) | ✅ (Assigned Only) | ✅ | ❌ (403) | ❌ (403) | ❌ (403) | ❌ (403) |
-| **OPERATOR** | ✅ | ❌ (403) | ✅ | ✅ | ❌ (403) | ❌ (403) | ✅ | ✅ | ❌ (403) | ❌ (403) | ❌ (403) |
+| Role | Incident Creation | Incident Status Update | AI Triage | Resource Match/Alloc | Dispatch Create/Reassign | Dispatch Status Update | Map Routing & Overlays | Map Hazard/Block Mgmt | RAG Knowledge Query | Knowledge Protocol Mgmt | User Management | Mesh Simulation | System Diagnostics |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **ADMIN** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **DISPATCHER** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ (403) | ❌ (403) | ✅ | ❌ (403) |
+| **RESPONDER** | ❌ (403) | ✅ | ❌ (403) | ❌ (403) | ❌ (403) | ✅ (Assigned Only) | ✅ | ❌ (403) | ✅ | ❌ (403) | ❌ (403) | ❌ (403) | ❌ (403) |
+| **OPERATOR** | ✅ | ❌ (403) | ✅ | ✅ | ❌ (403) | ❌ (403) | ✅ | ✅ | ✅ | ❌ (403) | ❌ (403) | ❌ (403) | ❌ (403) |
 
 ### Initial Account Bootstrap & Credential Model
 - **Zero Default Passwords**: SentinelGrid never ships with insecure hardcoded default credentials (e.g. no `admin/admin`).

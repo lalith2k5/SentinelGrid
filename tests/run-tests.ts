@@ -6739,10 +6739,32 @@ async function runAllTests() {
       const run1 = localRetrievalEngine.retrieve(docs, { query: 'respiratory inhalational burns smoke' });
       const run2 = localRetrievalEngine.retrieve(docs, { query: 'respiratory inhalational burns smoke' });
 
+      // Document ordering must be identical
       assert.deepEqual(
         run1.items.map(i => i.documentId),
         run2.items.map(i => i.documentId),
         'Retrieval order must be strictly deterministic across multiple executions'
+      );
+
+      // Scores must be identical
+      assert.deepEqual(
+        run1.items.map(i => i.relevanceScore),
+        run2.items.map(i => i.relevanceScore),
+        'Relevance scores must be identical across multiple executions'
+      );
+
+      // Match reasons must be identical
+      assert.deepEqual(
+        run1.items.map(i => i.matchReasons),
+        run2.items.map(i => i.matchReasons),
+        'Match reasons must be identical across multiple executions'
+      );
+
+      // Score breakdowns must be identical
+      assert.deepEqual(
+        run1.items.map(i => i.scoreBreakdown),
+        run2.items.map(i => i.scoreBreakdown),
+        'Score breakdowns must be identical across multiple executions'
       );
 
       for (let i = 0; i < run1.items.length - 1; i++) {
@@ -6751,6 +6773,34 @@ async function runAllTests() {
           'Items must be sorted descending by relevance score'
         );
       }
+
+      // Verify RAG engine level determinism (action checklists, precautions, contraindications, and conflict flags)
+      const ragRun1 = ragEngine.query(docs, { query: 'respiratory inhalational burns smoke' });
+      const ragRun2 = ragEngine.query(docs, { query: 'respiratory inhalational burns smoke' });
+
+      assert.deepEqual(
+        ragRun1.retrievedDocuments.map(d => d.documentId),
+        ragRun2.retrievedDocuments.map(d => d.documentId),
+        'RAG retrieved document IDs must match across runs'
+      );
+      assert.deepEqual(
+        ragRun1.actionChecklist,
+        ragRun2.actionChecklist,
+        'RAG action checklists must be identical across runs'
+      );
+      assert.deepEqual(
+        ragRun1.safetyWarnings,
+        ragRun2.safetyWarnings,
+        'RAG safety warnings must be identical across runs'
+      );
+      assert.deepEqual(
+        ragRun1.contraindications,
+        ragRun2.contraindications,
+        'RAG contraindications must be identical across runs'
+      );
+      assert.equal(ragRun1.hasConflicts, ragRun2.hasConflicts);
+      assert.equal(ragRun1.requiresHumanReview, ragRun2.requiresHumanReview);
+      assert.equal(ragRun1.status, ragRun2.status);
     }),
 
     test('PHASE8-008: Insufficient local evidence threshold returns INSUFFICIENT_LOCAL_EVIDENCE when no match meets threshold', async () => {
@@ -6983,23 +7033,27 @@ async function runAllTests() {
       const docId = 'DOC-MED-TRAUMA-001';
       ragKnowledgeService.setDocumentStatus(docId, 'INACTIVE', { userId: 'admin-1', role: 'ADMIN' });
 
-      const result = localRetrievalEngine.retrieve(ragKnowledgeService.getDocuments(), {
-        query: 'arterial bleeding tourniquet',
-        category: 'TRAUMA_BLEEDING'
-      });
+      try {
+        const result = localRetrievalEngine.retrieve(ragKnowledgeService.getDocuments(), {
+          query: 'arterial bleeding tourniquet',
+          category: 'TRAUMA_BLEEDING'
+        });
 
-      const hasInactive = result.items.some(i => i.documentId === docId);
-      assert.equal(hasInactive, false, 'Inactive document must not appear in standard retrieval');
+        const hasInactive = result.items.some(i => i.documentId === docId);
+        assert.equal(hasInactive, false, 'Inactive document must not appear in standard retrieval');
 
-      // When includeInactive=true, it should be retrieved
-      const resultWithInactive = localRetrievalEngine.retrieve(ragKnowledgeService.getDocuments(), {
-        query: 'arterial bleeding tourniquet',
-        category: 'TRAUMA_BLEEDING',
-        includeInactive: true
-      });
+        // When includeInactive=true, it should be retrieved
+        const resultWithInactive = localRetrievalEngine.retrieve(ragKnowledgeService.getDocuments(), {
+          query: 'arterial bleeding tourniquet',
+          category: 'TRAUMA_BLEEDING',
+          includeInactive: true
+        });
 
-      const hasWithFlag = resultWithInactive.items.some(i => i.documentId === docId);
-      assert.equal(hasWithFlag, true, 'Inactive document should appear when includeInactive is true');
+        const hasWithFlag = resultWithInactive.items.some(i => i.documentId === docId);
+        assert.equal(hasWithFlag, true, 'Inactive document should appear when includeInactive is true');
+      } finally {
+        ragKnowledgeService.setDocumentStatus(docId, 'ACTIVE', { userId: 'admin-1', role: 'ADMIN' });
+      }
     }),
 
     test('PHASE8-016: API GET /api/knowledge and /api/knowledge/categories return structured data', async () => {
@@ -7023,10 +7077,16 @@ async function runAllTests() {
       assert.ok(catsBody.categories.length > 5);
     }),
 
-    test('PHASE8-017: API POST /api/knowledge/retrieve executes deterministic RAG query', async () => {
+    test('PHASE8-017: API POST /api/knowledge/retrieve executes deterministic RAG query with authenticated session', async () => {
       db.resetForTesting(TEST_DB_PATH);
 
+      authService.register({ email: 'admin817@grid.local', password: 'AdminPass123!@#', name: 'Admin User' });
+      const login = authService.login({ email: 'admin817@grid.local', password: 'AdminPass123!@#' });
+
       const req = mockReqRes({
+        headers: {
+          authorization: `Bearer ${login.token}`
+        },
         body: {
           query: 'flash flood trapped vehicle water rising',
           category: 'NATURAL_FLOOD',
@@ -7035,9 +7095,15 @@ async function runAllTests() {
         }
       });
 
-      const retrieveHandler = (knowledgeRoutes as any).stack.find((r: any) => r.route?.path === '/retrieve').route.stack[0].handle;
-      retrieveHandler(req.req, req.res, () => {});
+      const retrieveRoute = (knowledgeRoutes as any).stack.find((r: any) => r.route?.path === '/retrieve' && r.route?.methods?.post);
+      const stack = retrieveRoute.route.stack;
+      let nextCalled = false;
+      stack[0].handle(req.req, req.res, () => {
+        nextCalled = true;
+        stack[1].handle(req.req, req.res, () => {});
+      });
 
+      assert.equal(nextCalled, true, 'requireAuth should allow authenticated admin request');
       assert.equal(req.getStatus(), 200);
       const body = req.getData();
       assert.equal(body.success, true);
@@ -7097,6 +7163,253 @@ async function runAllTests() {
       assert.equal(ragResult.aiTriageConfidence, triage.confidence);
       assert.equal(ragResult.requiresHumanReview, true);
       assert.ok(ragResult.actionChecklist.length > 0);
+    }),
+
+    // =========================================================================
+    // PHASE 8.1 SECURITY & DOCUMENTATION HARDENING REGRESSION TESTS
+    // =========================================================================
+
+    test('PHASE8.1-001: RAG Authentication — POST /api/knowledge/retrieve rejects unauthenticated requests with 401', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+
+      const retrieveRoute = (knowledgeRoutes as any).stack.find((r: any) => r.route?.path === '/retrieve' && r.route?.methods?.post);
+      const stack = retrieveRoute.route.stack;
+
+      // 1. Missing Authorization header
+      const reqMissing = mockReqRes({ body: { query: 'bleeding' } });
+      let nextCalled1 = false;
+      stack[0].handle(reqMissing.req, reqMissing.res, () => { nextCalled1 = true; });
+      assert.equal(nextCalled1, false, 'Unauthenticated request must not call next()');
+      assert.equal(reqMissing.getStatus(), 401, 'Must return 401 when no auth header provided');
+
+      // 2. Malformed / invalid token
+      const reqInvalid = mockReqRes({
+        headers: { authorization: 'Bearer invalid.bogus.token' },
+        body: { query: 'bleeding' }
+      });
+      let nextCalled2 = false;
+      stack[0].handle(reqInvalid.req, reqInvalid.res, () => { nextCalled2 = true; });
+      assert.equal(nextCalled2, false, 'Invalid token request must not call next()');
+      assert.equal(reqInvalid.getStatus(), 401, 'Must return 401 on invalid token');
+    }),
+
+    test('PHASE8.1-002: RAG Authentication — POST /api/knowledge/query rejects unauthenticated requests with 401', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+
+      const queryRoute = (knowledgeRoutes as any).stack.find((r: any) => r.route?.path === '/query' && r.route?.methods?.post);
+      const stack = queryRoute.route.stack;
+
+      // Missing Authorization header
+      const req = mockReqRes({ body: { query: 'burn treatment' } });
+      let nextCalled = false;
+      stack[0].handle(req.req, req.res, () => { nextCalled = true; });
+      assert.equal(nextCalled, false, 'Unauthenticated query request must not call next()');
+      assert.equal(req.getStatus(), 401, 'Must return 401 when no auth header provided');
+    }),
+
+    test('PHASE8.1-003: RAG Authentication — Authenticated requests with valid tokens succeed (200) for all roles (ADMIN, DISPATCHER, OPERATOR, RESPONDER)', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+
+      // Register bootstrap admin
+      authService.register({ email: 'admin81@grid.local', password: 'AdminPass123!@#', name: 'Admin 8.1' });
+      const adminLogin = authService.login({ email: 'admin81@grid.local', password: 'AdminPass123!@#' });
+
+      // Register other roles
+      authService.register({ email: 'disp81@grid.local', password: 'DispPass123!@#', name: 'Dispatcher 8.1' });
+      const dispUser = db.findUserByEmail('disp81@grid.local')!;
+      db.updateUserRole(dispUser.id, 'DISPATCHER');
+      const dispLogin = authService.login({ email: 'disp81@grid.local', password: 'DispPass123!@#' });
+
+      authService.register({ email: 'op81@grid.local', password: 'OpPass123!@#', name: 'Operator 8.1' });
+      const opLogin = authService.login({ email: 'op81@grid.local', password: 'OpPass123!@#' });
+
+      authService.register({ email: 'resp81@grid.local', password: 'RespPass123!@#', name: 'Responder 8.1' });
+      const respUser = db.findUserByEmail('resp81@grid.local')!;
+      db.updateUserRole(respUser.id, 'RESPONDER');
+      const respLogin = authService.login({ email: 'resp81@grid.local', password: 'RespPass123!@#' });
+
+      const testRoles = [
+        { role: 'ADMIN', token: adminLogin.token },
+        { role: 'DISPATCHER', token: dispLogin.token },
+        { role: 'OPERATOR', token: opLogin.token },
+        { role: 'RESPONDER', token: respLogin.token }
+      ];
+
+      const retrieveRoute = (knowledgeRoutes as any).stack.find((r: any) => r.route?.path === '/retrieve' && r.route?.methods?.post);
+      const stack = retrieveRoute.route.stack;
+
+      for (const { role, token } of testRoles) {
+        const req = mockReqRes({
+          headers: { authorization: `Bearer ${token}` },
+          body: { query: 'tourniquet application bleeding', category: 'TRAUMA_BLEEDING' }
+        });
+
+        let nextCalled = false;
+        stack[0].handle(req.req, req.res, () => {
+          nextCalled = true;
+          stack[1].handle(req.req, req.res, () => {});
+        });
+
+        assert.equal(nextCalled, true, `Role ${role} should be authorized for RAG retrieval`);
+        assert.equal(req.getStatus(), 200, `Role ${role} should receive HTTP 200`);
+        const data = req.getData();
+        assert.equal(data.success, true);
+        assert.ok(data.retrievedDocuments.length > 0);
+        assert.ok(data.actionChecklist.length > 0);
+      }
+    }),
+
+    test('PHASE8.1-004: Knowledge RBAC Protection — Authenticated non-admin users (OPERATOR, DISPATCHER, RESPONDER) cannot mutate knowledge', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+
+      authService.register({ email: 'admin814@grid.local', password: 'AdminPass123!@#', name: 'Admin 8.1.4' });
+
+      authService.register({ email: 'disp814@grid.local', password: 'DispPass123!@#', name: 'Dispatcher 8.1.4' });
+      const dispUser = db.findUserByEmail('disp814@grid.local')!;
+      db.updateUserRole(dispUser.id, 'DISPATCHER');
+      const dispLogin = authService.login({ email: 'disp814@grid.local', password: 'DispPass123!@#' });
+
+      authService.register({ email: 'op814@grid.local', password: 'OpPass123!@#', name: 'Operator 8.1.4' });
+      const opLogin = authService.login({ email: 'op814@grid.local', password: 'OpPass123!@#' });
+
+      authService.register({ email: 'resp814@grid.local', password: 'RespPass123!@#', name: 'Responder 8.1.4' });
+      const respUser = db.findUserByEmail('resp814@grid.local')!;
+      db.updateUserRole(respUser.id, 'RESPONDER');
+      const respLogin = authService.login({ email: 'resp814@grid.local', password: 'RespPass123!@#' });
+
+      const nonAdminTokens = [
+        { role: 'DISPATCHER', token: dispLogin.token },
+        { role: 'OPERATOR', token: opLogin.token },
+        { role: 'RESPONDER', token: respLogin.token }
+      ];
+
+      // Endpoints that require ADMIN:
+      // 1. POST /api/knowledge (Create)
+      const createRoute = (knowledgeRoutes as any).stack.find((r: any) => r.route?.path === '/' && r.route?.methods?.post);
+      // 2. PUT /api/knowledge/:id (Update)
+      const updateRoute = (knowledgeRoutes as any).stack.find((r: any) => r.route?.path === '/:id' && r.route?.methods?.put);
+      // 3. POST /api/knowledge/:id/version (Version publish)
+      const versionRoute = (knowledgeRoutes as any).stack.find((r: any) => r.route?.path === '/:id/version' && r.route?.methods?.post);
+      // 4. PATCH /api/knowledge/:id/status (Status mutation)
+      const statusRoute = (knowledgeRoutes as any).stack.find((r: any) => r.route?.path === '/:id/status' && r.route?.methods?.patch);
+
+      for (const { role, token } of nonAdminTokens) {
+        // Test POST /api/knowledge (create)
+        const reqCreate = mockReqRes({
+          headers: { authorization: `Bearer ${token}` },
+          body: { id: 'MALICIOUS-01', title: 'Malicious', category: 'TRAUMA_BLEEDING', content: 'test' }
+        });
+        createRoute.route.stack[0].handle(reqCreate.req, reqCreate.res, () => {
+          createRoute.route.stack[1].handle(reqCreate.req, reqCreate.res, () => {
+            createRoute.route.stack[2].handle(reqCreate.req, reqCreate.res, () => {});
+          });
+        });
+        assert.equal(reqCreate.getStatus(), 403, `Role ${role} must be rejected with 403 on document creation`);
+
+        // Test PUT /api/knowledge/:id (update)
+        const reqUpdate = mockReqRes({
+          headers: { authorization: `Bearer ${token}` },
+          params: { id: 'DOC-MED-TRAUMA-001' },
+          body: { title: 'Modified by Non-Admin' }
+        });
+        updateRoute.route.stack[0].handle(reqUpdate.req, reqUpdate.res, () => {
+          updateRoute.route.stack[1].handle(reqUpdate.req, reqUpdate.res, () => {
+            updateRoute.route.stack[2].handle(reqUpdate.req, reqUpdate.res, () => {});
+          });
+        });
+        assert.equal(reqUpdate.getStatus(), 403, `Role ${role} must be rejected with 403 on document update`);
+
+        // Test POST /api/knowledge/:id/version (version)
+        const reqVer = mockReqRes({
+          headers: { authorization: `Bearer ${token}` },
+          params: { id: 'DOC-MED-TRAUMA-001' },
+          body: { version: '2.0.0', changeLog: 'Unauthorized' }
+        });
+        versionRoute.route.stack[0].handle(reqVer.req, reqVer.res, () => {
+          versionRoute.route.stack[1].handle(reqVer.req, reqVer.res, () => {
+            versionRoute.route.stack[2].handle(reqVer.req, reqVer.res, () => {});
+          });
+        });
+        assert.equal(reqVer.getStatus(), 403, `Role ${role} must be rejected with 403 on document versioning`);
+
+        // Test PATCH /api/knowledge/:id/status (status change)
+        const reqStatus = mockReqRes({
+          headers: { authorization: `Bearer ${token}` },
+          params: { id: 'DOC-MED-TRAUMA-001' },
+          body: { status: 'ARCHIVED' }
+        });
+        statusRoute.route.stack[0].handle(reqStatus.req, reqStatus.res, () => {
+          statusRoute.route.stack[1].handle(reqStatus.req, reqStatus.res, () => {
+            statusRoute.route.stack[2].handle(reqStatus.req, reqStatus.res, () => {});
+          });
+        });
+        assert.equal(reqStatus.getStatus(), 403, `Role ${role} must be rejected with 403 on document status change`);
+      }
+    }),
+
+    test('PHASE8.1-005: RAG Determinism Invariant — Exact equality of document ordering, scores, match reasons, and score breakdowns across multiple independent retrieval runs', async () => {
+      db.resetForTesting(TEST_DB_PATH);
+      const docs = ragKnowledgeService.getDocuments();
+
+      const testQueries = [
+        { query: 'arterial bleeding tourniquet application pressure', category: 'TRAUMA_BLEEDING', severity: 'P1' },
+        { query: 'anhydrous ammonia toxic gas cloud perimeter evacuation', category: 'HAZMAT_CHEMICAL', hazards: ['HAZMAT', 'CHEMICAL_SPILL'] },
+        { query: 'wildfire ember structural defense perimeter engine company', category: 'NATURAL_FIRE', hazards: ['FIRE'] },
+        { query: 'crush syndrome extrication void marking USAR', category: 'STRUCTURAL_COLLAPSE', hazards: ['STRUCTURAL_COLLAPSE'] }
+      ];
+
+      for (const tq of testQueries) {
+        const retrieval1 = localRetrievalEngine.retrieve(docs, tq);
+        const retrieval2 = localRetrievalEngine.retrieve(docs, tq);
+        const retrieval3 = localRetrievalEngine.retrieve(docs, tq);
+
+        // 1. Verify item counts
+        assert.equal(retrieval1.items.length, retrieval2.items.length);
+        assert.equal(retrieval2.items.length, retrieval3.items.length);
+
+        // 2. Verify exact document ID ordering
+        assert.deepEqual(
+          retrieval1.items.map(i => i.documentId),
+          retrieval2.items.map(i => i.documentId)
+        );
+        assert.deepEqual(
+          retrieval2.items.map(i => i.documentId),
+          retrieval3.items.map(i => i.documentId)
+        );
+
+        // 3. Verify exact relevance scores
+        assert.deepEqual(
+          retrieval1.items.map(i => i.relevanceScore),
+          retrieval2.items.map(i => i.relevanceScore)
+        );
+
+        // 4. Verify match reasons
+        assert.deepEqual(
+          retrieval1.items.map(i => i.matchReasons),
+          retrieval2.items.map(i => i.matchReasons)
+        );
+
+        // 5. Verify score breakdowns
+        assert.deepEqual(
+          retrieval1.items.map(i => i.scoreBreakdown),
+          retrieval2.items.map(i => i.scoreBreakdown)
+        );
+
+        // 6. Verify synthesized RAG query determinism
+        const ragRes1 = ragEngine.query(docs, tq);
+        const ragRes2 = ragEngine.query(docs, tq);
+
+        assert.deepEqual(
+          ragRes1.retrievedDocuments.map(d => d.documentId),
+          ragRes2.retrievedDocuments.map(d => d.documentId)
+        );
+        assert.deepEqual(ragRes1.actionChecklist, ragRes2.actionChecklist);
+        assert.deepEqual(ragRes1.safetyWarnings, ragRes2.safetyWarnings);
+        assert.deepEqual(ragRes1.contraindications, ragRes2.contraindications);
+        assert.equal(ragRes1.hasConflicts, ragRes2.hasConflicts);
+        assert.equal(ragRes1.requiresHumanReview, ragRes2.requiresHumanReview);
+        assert.equal(ragRes1.status, ragRes2.status);
+      }
     })
   ];
 

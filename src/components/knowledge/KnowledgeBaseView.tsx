@@ -120,7 +120,7 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
     content: ''
   });
 
-  const isAdmin = userRole === 'ADMIN' || userRole === 'SUPERADMIN' || userRole === 'DISPATCHER';
+  const isAdmin = userRole === 'ADMIN' || userRole === 'SUPERADMIN';
 
   const fetchDocuments = async () => {
     try {

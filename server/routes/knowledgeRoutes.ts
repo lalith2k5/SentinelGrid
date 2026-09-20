@@ -132,15 +132,15 @@ router.get('/:id', (req: Request, res: Response) => {
 /**
  * POST /api/knowledge/retrieve
  * POST /api/knowledge/query
- * Deterministic RAG query endpoint.
+ * Deterministic RAG query endpoint (requires authenticated session).
  */
 const handleRAGQuery = (req: Request, res: Response) => {
   try {
     const input = req.body || {};
-    const actor = (req as any).user ? {
-      userId: (req as any).user.id,
-      role: (req as any).user.role,
-      name: (req as any).user.name
+    const actor = req.user ? {
+      userId: req.user.userId,
+      role: req.user.role,
+      name: req.user.name
     } : undefined;
 
     const result = ragKnowledgeService.queryRAG(input, actor);
@@ -150,8 +150,8 @@ const handleRAGQuery = (req: Request, res: Response) => {
   }
 };
 
-router.post('/retrieve', handleRAGQuery);
-router.post('/query', handleRAGQuery);
+router.post('/retrieve', requireAuth, handleRAGQuery);
+router.post('/query', requireAuth, handleRAGQuery);
 
 /**
  * POST /api/knowledge
@@ -164,10 +164,10 @@ router.post('/', requireAuth, requireRole('ADMIN'), (req: Request, res: Response
       return res.status(400).json({ error: 'id, title, category, and content are required fields.' });
     }
 
-    const actor = (req as any).user ? {
-      userId: (req as any).user.id,
-      role: (req as any).user.role,
-      name: (req as any).user.name
+    const actor = req.user ? {
+      userId: req.user.userId,
+      role: req.user.role,
+      name: req.user.name
     } : undefined;
 
     const newDoc = ragKnowledgeService.createDocument(body, actor);
@@ -183,10 +183,10 @@ router.post('/', requireAuth, requireRole('ADMIN'), (req: Request, res: Response
  */
 router.put('/:id', requireAuth, requireRole('ADMIN'), (req: Request, res: Response) => {
   try {
-    const actor = (req as any).user ? {
-      userId: (req as any).user.id,
-      role: (req as any).user.role,
-      name: (req as any).user.name
+    const actor = req.user ? {
+      userId: req.user.userId,
+      role: req.user.role,
+      name: req.user.name
     } : undefined;
 
     const updated = ragKnowledgeService.updateDocument(req.params.id, req.body, actor);
@@ -207,10 +207,10 @@ router.post('/:id/version', requireAuth, requireRole('ADMIN'), (req: Request, re
       return res.status(400).json({ error: 'version and changeLog are required to publish a new version.' });
     }
 
-    const actor = (req as any).user ? {
-      userId: (req as any).user.id,
-      role: (req as any).user.role,
-      name: (req as any).user.name
+    const actor = req.user ? {
+      userId: req.user.userId,
+      role: req.user.role,
+      name: req.user.name
     } : undefined;
 
     const updated = ragKnowledgeService.publishNewVersion(
@@ -238,10 +238,10 @@ router.patch('/:id/status', requireAuth, requireRole('ADMIN'), (req: Request, re
       return res.status(400).json({ error: 'Valid status is required (ACTIVE, INACTIVE, ARCHIVED, DRAFT).' });
     }
 
-    const actor = (req as any).user ? {
-      userId: (req as any).user.id,
-      role: (req as any).user.role,
-      name: (req as any).user.name
+    const actor = req.user ? {
+      userId: req.user.userId,
+      role: req.user.role,
+      name: req.user.name
     } : undefined;
 
     const updated = ragKnowledgeService.setDocumentStatus(req.params.id, status as KnowledgeStatus, actor);
