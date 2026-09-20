@@ -3,7 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { db } from '../server/db/database.ts';
-import { authService } from '../server/services/authService.ts';
+import { authService, getOrCreateAuthSecret } from '../server/services/authService.ts';
+import { systemStatusService } from '../server/services/systemStatusService.ts';
 import { incidentService } from '../server/services/incidentService.ts';
 import { resourceService } from '../server/services/resourceService.ts';
 import { meshCommunicationService } from '../server/services/meshCommunicationService.ts';
@@ -24,6 +25,10 @@ import { DispatchStatus } from '../server/db/schema.ts';
 
 // Dedicated test database file so we don't clobber production or local session data
 const TEST_DB_PATH = path.join(process.cwd(), 'data', 'sentinelgrid.test.json');
+
+// Ensure test runner operates with isolated, clean secret environment
+delete process.env.AUTH_SECRET;
+authService.setAuthSecretForTesting(null);
 
 /**
  * Lightweight mock helper to execute Express middleware & routes synchronously in tests
@@ -6157,6 +6162,431 @@ async function runAllTests() {
 
       assert.equal(db.getIncidents().length, initialIncCount);
       assert.equal(db.getResources().length, initialResCount);
+    }),
+
+    // ---------------------------------------------------------
+    // Phase 7.2.1 Hardening Regression Tests
+    // ---------------------------------------------------------
+
+    // A. AUTH_SECRET Validation
+    test('HARDENING-A01: AUTH_SECRET rejects weak/short environment secret on startup', () => {
+      assert.throws(
+        () => getOrCreateAuthSecret('too-short-secret'),
+        /AUTH_SECRET environment variable is too short/,
+        'Should reject secret with fewer than 64 characters'
+      );
+      assert.throws(
+        () => getOrCreateAuthSecret('0123456789abcdef'),
+        /AUTH_SECRET environment variable is too short/,
+        'Should reject 16-char secret'
+      );
+    }),
+
+    test('HARDENING-A02: AUTH_SECRET accepts valid 64+ char environment secret', () => {
+      const valid64CharSecret = 'a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90';
+      const result = getOrCreateAuthSecret(valid64CharSecret);
+      assert.equal(result, valid64CharSecret);
+    }),
+
+    test('HARDENING-A03: AUTH_SECRET generates and persists secure 64-char hex secret when env absent', () => {
+      const tempSecretFile = path.join(process.cwd(), 'data', `.test_secret_${Date.now()}`);
+      try {
+        const generated = getOrCreateAuthSecret(undefined, tempSecretFile);
+        assert.ok(generated.length >= 64, 'Generated secret must be at least 64 hex characters');
+        assert.ok(fs.existsSync(tempSecretFile), 'Secret file must be saved');
+        const readBack = fs.readFileSync(tempSecretFile, 'utf-8').trim();
+        assert.equal(readBack, generated);
+      } finally {
+        if (fs.existsSync(tempSecretFile)) {
+          fs.unlinkSync(tempSecretFile);
+        }
+      }
+    }),
+
+    test('HARDENING-A04: Token signing, HMAC verification, timingSafeEqual, and revoked token rejection', () => {
+      const testUser = {
+        id: 'usr-hardening-test',
+        email: 'commander@sentinelgrid.local',
+        name: 'Test Commander',
+        role: 'ADMIN' as const,
+        passwordHash: 'hash',
+        salt: 'salt',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      const token = authService.generateToken(testUser);
+      assert.ok(token && token.includes('.'), 'Token must be properly formatted with payload and HMAC');
+
+      const verified = authService.verifyToken(token);
+      assert.ok(verified, 'Token must verify cleanly');
+      assert.equal(verified?.userId, testUser.id);
+      assert.equal(verified?.role, 'ADMIN');
+
+      // Tampered token must fail verification
+      const [payload, sig] = token.split('.');
+      const tampered = `${payload}.${sig.slice(0, -2)}xx`;
+      assert.equal(authService.verifyToken(tampered), null, 'Tampered token must be rejected');
+
+      // Revoked token must be rejected
+      authService.revokeToken(token);
+      assert.equal(authService.verifyToken(token), null, 'Revoked token must fail verification');
+    }),
+
+    // B. Admin Bootstrap & Credentials
+    test('HARDENING-B01: First registered user becomes ADMIN; subsequent becomes OPERATOR', () => {
+      const bootstrapDbPath = path.join(process.cwd(), 'data', `sentinelgrid.bootstrap.test.${Date.now()}.json`);
+      try {
+        db.resetForTesting(bootstrapDbPath);
+        
+        // No default admin exists in a fresh database
+        assert.equal(db.getUsers().length, 0, 'Clean database must have 0 users');
+        const statusBefore = authService.getBootstrapStatus();
+        assert.equal(statusBefore.hasAdmin, false);
+        assert.equal(statusBefore.nextRole, 'ADMIN');
+
+        // First registration
+        const { user: firstUser } = authService.register({
+          email: 'first.commander@sentinelgrid.local',
+          password: 'EmergencyPassword2026!',
+          name: 'First Commander',
+          department: 'Emergency HQ'
+        });
+        assert.equal(firstUser.role, 'ADMIN', 'First registered user must be ADMIN');
+
+        // Second registration
+        const statusAfter = authService.getBootstrapStatus();
+        assert.equal(statusAfter.hasAdmin, true);
+        assert.equal(statusAfter.nextRole, 'OPERATOR');
+
+        const { user: secondUser } = authService.register({
+          email: 'field.operator@sentinelgrid.local',
+          password: 'EmergencyPassword2026!',
+          name: 'Field Operator',
+          department: 'Logistics'
+        });
+        assert.equal(secondUser.role, 'OPERATOR', 'Subsequent registered user must be OPERATOR');
+
+        // Password rules: reject passwords shorter than 8 characters
+        assert.throws(
+          () => authService.register({
+            email: 'short.pass@sentinelgrid.local',
+            password: 'short',
+            name: 'Short Pass',
+            department: 'Field'
+          }),
+          /Password must be at least 8 characters long/
+        );
+      } finally {
+        if (fs.existsSync(bootstrapDbPath)) {
+          fs.unlinkSync(bootstrapDbPath);
+        }
+        db.resetForTesting(TEST_DB_PATH);
+      }
+    }),
+
+    test('HARDENING-B02: No hardcoded default credentials exist (admin/admin is rejected)', () => {
+      // Trying to login with fake default credentials fails
+      assert.throws(
+        () => authService.login({ email: 'admin', password: 'admin' }),
+        /Invalid email or password/
+      );
+      assert.throws(
+        () => authService.login({ email: 'admin@sentinelgrid.local', password: 'admin' }),
+        /Invalid email or password/
+      );
+    }),
+
+    // C. Database Failure Modes & Degraded Status
+    test('HARDENING-C01: Normal database initialization reports OPERATIONAL state', () => {
+      const status = db.getStatus();
+      assert.equal(status.isInitialized, true);
+      assert.equal(status.status, 'OPERATIONAL');
+      assert.equal(status.connected, true);
+      assert.equal(status.error, null);
+    }),
+
+    test('HARDENING-C02: Database recovery backs up corrupted JSON and reinitializes clean state', () => {
+      const corruptDbPath = path.join(process.cwd(), 'data', `sentinelgrid.corrupt.test.${Date.now()}.json`);
+      try {
+        fs.writeFileSync(corruptDbPath, '{"broken": [json_syntax_error', 'utf-8');
+        db.resetForTesting(corruptDbPath);
+        const status = db.getStatus();
+        assert.equal(status.isInitialized, true);
+        assert.equal(status.status, 'OPERATIONAL');
+      } finally {
+        if (fs.existsSync(corruptDbPath)) {
+          fs.unlinkSync(corruptDbPath);
+        }
+        db.resetForTesting(TEST_DB_PATH);
+      }
+    }),
+
+    test('HARDENING-C03: Database failure enters DATABASE_UNAVAILABLE and rejects writes without in-memory mutation', async () => {
+      const initialIncidents = db.getIncidents().length;
+      try {
+        db.simulateDatabaseFailure('Disk write failure: simulated read-only filesystem');
+        
+        const status = db.getStatus();
+        assert.equal(status.isInitialized, false);
+        assert.equal(status.status, 'DATABASE_UNAVAILABLE');
+        assert.equal(status.connected, false);
+
+        // Writes must throw DATABASE_UNAVAILABLE
+        assert.throws(
+          () => db.insertIncident({
+            id: 'inc-should-fail',
+            incidentNumber: 'INC-FAIL-001',
+            title: 'Should Fail',
+            description: 'Persistence should be denied',
+            severity: 'LOW',
+            status: 'OPEN',
+            verificationStatus: 'UNVERIFIED',
+            priorityScore: 10,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          }),
+          /DATABASE_UNAVAILABLE/
+        );
+
+        // Check that no in-memory mutation occurred
+        assert.equal(db.getIncidents().length, initialIncidents, 'In-memory state must not be silently mutated during persistence outage');
+
+        // System diagnostics reports DEGRADED state
+        const comprehensive = await systemStatusService.getComprehensiveStatus();
+        const dbSubsystem = comprehensive.subsystems.find(s => s.id === 'local_database');
+        assert.ok(dbSubsystem);
+        assert.equal(dbSubsystem.state, 'DEGRADED');
+      } finally {
+        // Recover database to operational state
+        db.resetForTesting(TEST_DB_PATH);
+        assert.equal(db.getStatus().status, 'OPERATIONAL');
+      }
+    }),
+
+    // D. Dispatch Reassignment Failure Safety & Atomic Rollback
+    test('HARDENING-D01: Dispatch reassignment succeeds cleanly and updates history', () => {
+      // 1. Seed incident and two resources
+      const inc = incidentService.createIncident({
+        title: 'Reassignment Test Incident',
+        description: 'Testing dispatch reassignment',
+        severity: 'MEDIUM',
+        latitude: 10.001,
+        longitude: 10.001
+      });
+
+      const resAId = `res_reassign_A_${Date.now()}`;
+      const resBId = `res_reassign_B_${Date.now()}`;
+
+      db.insertResource({
+        id: resAId,
+        resourceCode: `MED-A-${Date.now()}`,
+        name: 'Ambulance A',
+        type: 'AMBULANCE',
+        status: 'AVAILABLE',
+        availability: 'AVAILABLE',
+        capabilities: ['MEDICAL'],
+        location: 'HQ',
+        latitude: 10.001,
+        longitude: 10.001,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+
+      db.insertResource({
+        id: resBId,
+        resourceCode: `MED-B-${Date.now()}`,
+        name: 'Ambulance B',
+        type: 'AMBULANCE',
+        status: 'AVAILABLE',
+        availability: 'AVAILABLE',
+        capabilities: ['MEDICAL'],
+        location: 'Station 2',
+        latitude: 10.001,
+        longitude: 10.001,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+
+      // Create initial dispatch for Resource A
+      const dispatch = dispatchService.createDispatch({
+        incidentId: inc.id,
+        resourceId: resAId,
+        createdBy: 'Admin Commander',
+        actorRole: 'ADMIN',
+        actorId: 'admin-1',
+        dispatchNotes: 'Initial dispatch'
+      });
+
+      assert.equal(dispatch.resourceId, resAId);
+      assert.equal(db.getResourceById(resAId)?.status, 'ASSIGNED');
+      assert.equal(db.getResourceById(resBId)?.status, 'AVAILABLE');
+
+      // Reassign to Resource B
+      const reassigned = dispatchService.reassignDispatch(dispatch.dispatchId, resBId, {
+        userId: 'admin-1',
+        name: 'Admin Commander',
+        role: 'ADMIN',
+        reason: 'Resource B is closer to incident'
+      });
+
+      assert.equal(reassigned.resourceId, resBId);
+      assert.equal(db.getResourceById(resAId)?.status, 'AVAILABLE', 'Previous resource must be released to AVAILABLE');
+      assert.equal(db.getResourceById(resBId)?.status, 'ASSIGNED', 'New resource must be allocated as ASSIGNED');
+      assert.equal(reassigned.reassignmentHistory?.length, 1);
+      assert.equal(reassigned.reassignmentHistory?.[0].previousResourceId, resAId);
+      assert.equal(reassigned.reassignmentHistory?.[0].newResourceId, resBId);
+    }),
+
+    test('HARDENING-D02: Reassignment failure after release rolls back old resource to ASSIGNED', () => {
+      const inc = incidentService.createIncident({
+        title: 'Rollback Test After Release',
+        description: 'Test rollback after release failure with medical patient',
+        severity: 'MEDIUM',
+        latitude: 10.001,
+        longitude: 10.001
+      });
+
+      const res1 = `res_rel_1_${Date.now()}`;
+      const res2 = `res_rel_2_${Date.now()}`;
+
+      db.insertResource({
+        id: res1,
+        resourceCode: `MED-REL-1-${Date.now()}`,
+        name: 'Ambulance 1',
+        type: 'AMBULANCE',
+        status: 'AVAILABLE',
+        availability: 'AVAILABLE',
+        capabilities: ['MEDICAL'],
+        location: 'HQ',
+        latitude: 10.001,
+        longitude: 10.001,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+
+      db.insertResource({
+        id: res2,
+        resourceCode: `MED-REL-2-${Date.now()}`,
+        name: 'Ambulance 2',
+        type: 'AMBULANCE',
+        status: 'AVAILABLE',
+        availability: 'AVAILABLE',
+        capabilities: ['MEDICAL'],
+        location: 'Station 2',
+        latitude: 10.001,
+        longitude: 10.001,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+
+      const dispatch = dispatchService.createDispatch({
+        incidentId: inc.id,
+        resourceId: res1,
+        createdBy: 'Admin Commander',
+        actorRole: 'ADMIN',
+        actorId: 'admin-1',
+        dispatchNotes: 'Initial dispatch'
+      });
+
+      assert.equal(db.getResourceById(res1)?.status, 'ASSIGNED');
+      assert.equal(db.getResourceById(res2)?.status, 'AVAILABLE');
+
+      // Reassignment simulating failure after release
+      assert.throws(
+        () => dispatchService.reassignDispatch(dispatch.dispatchId, res2, {
+          userId: 'admin-1',
+          name: 'Admin Commander',
+          role: 'ADMIN',
+          reason: 'Testing failure rollback',
+          _simulateFailureStep: 'AFTER_RELEASE'
+        } as any),
+        /Simulated failure after releasing old resource/
+      );
+
+      // Invariant check: old resource MUST remain ASSIGNED, new resource MUST remain AVAILABLE, dispatch points to res1
+      assert.equal(db.getResourceById(res1)?.status, 'ASSIGNED', 'Old resource must be rolled back to ASSIGNED');
+      assert.equal(db.getResourceById(res2)?.status, 'AVAILABLE', 'New resource must remain AVAILABLE');
+      const currentDispatch = db.getDispatchById(dispatch.dispatchId);
+      assert.equal(currentDispatch?.resourceId, res1, 'Dispatch must still point to old resource');
+    }),
+
+    test('HARDENING-D03: Reassignment failure during update rolls back BOTH resources and dispatch atomically', () => {
+      const inc = incidentService.createIncident({
+        title: 'Rollback Test During Update',
+        description: 'Test rollback during dispatch update failure with medical patient',
+        severity: 'MEDIUM',
+        latitude: 10.001,
+        longitude: 10.001
+      });
+
+      const resA = `res_upd_A_${Date.now()}`;
+      const resB = `res_upd_B_${Date.now()}`;
+
+      db.insertResource({
+        id: resA,
+        resourceCode: `MED-UPD-A-${Date.now()}`,
+        name: 'Ambulance A',
+        type: 'AMBULANCE',
+        status: 'AVAILABLE',
+        availability: 'AVAILABLE',
+        capabilities: ['MEDICAL'],
+        location: 'HQ',
+        latitude: 10.001,
+        longitude: 10.001,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+
+      db.insertResource({
+        id: resB,
+        resourceCode: `MED-UPD-B-${Date.now()}`,
+        name: 'Ambulance B',
+        type: 'AMBULANCE',
+        status: 'AVAILABLE',
+        availability: 'AVAILABLE',
+        capabilities: ['MEDICAL'],
+        location: 'Station 2',
+        latitude: 10.001,
+        longitude: 10.001,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+
+      const dispatch = dispatchService.createDispatch({
+        incidentId: inc.id,
+        resourceId: resA,
+        createdBy: 'Admin Commander',
+        actorRole: 'ADMIN',
+        actorId: 'admin-1',
+        dispatchNotes: 'Initial dispatch'
+      });
+
+      assert.equal(db.getResourceById(resA)?.status, 'ASSIGNED');
+      assert.equal(db.getResourceById(resB)?.status, 'AVAILABLE');
+
+      // Reassignment simulating failure during update
+      assert.throws(
+        () => dispatchService.reassignDispatch(dispatch.dispatchId, resB, {
+          userId: 'admin-1',
+          name: 'Admin Commander',
+          role: 'ADMIN',
+          reason: 'Testing failure rollback',
+          _simulateFailureStep: 'DURING_UPDATE'
+        } as any),
+        /Simulated failure during dispatch update/
+      );
+
+      // Invariant check:
+      // resA restored to ASSIGNED
+      // resB restored to AVAILABLE
+      // dispatch still points to resA
+      // No double allocation, no orphaned allocation
+      assert.equal(db.getResourceById(resA)?.status, 'ASSIGNED', 'Resource A must be restored to ASSIGNED');
+      assert.equal(db.getResourceById(resB)?.status, 'AVAILABLE', 'Resource B must be restored to AVAILABLE');
+      const currentDispatch = db.getDispatchById(dispatch.dispatchId);
+      assert.equal(currentDispatch?.resourceId, resA, 'Dispatch must still point to Resource A');
+      assert.equal(currentDispatch?.reassignmentHistory?.length || 0, 0, 'No partial reassignment history should remain');
     })
   ];
 

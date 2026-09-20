@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { db } from '../db/database.ts';
-import { Dispatch, DispatchStatus, DispatchReassignment } from '../db/schema.ts';
+import { Dispatch, DispatchStatus, DispatchReassignment, Resource } from '../db/schema.ts';
 import { resourceMatchingService } from './resourceMatchingService.ts';
 import { ServiceModuleInfo } from './aiTriageService.ts';
 
@@ -414,57 +414,100 @@ export class DispatchService {
     }
 
     const previousResourceId = dispatch.resourceId;
+    const previousResource = db.getResourceById(previousResourceId);
+    if (!previousResource) {
+      throw new Error(`Current assigned resource "${previousResourceId}" not found`);
+    }
 
-    // Release old resource
-    db.releaseResource(previousResourceId, actor);
+    // Capture complete pre-operation snapshots for failure-safe rollback
+    const previousResourceSnapshot: Resource = JSON.parse(JSON.stringify(previousResource));
+    const newResourceSnapshot: Resource = JSON.parse(JSON.stringify(newResource));
+    const dispatchSnapshot: Dispatch = JSON.parse(JSON.stringify(dispatch));
 
-    // Allocate new resource
-    db.allocateResource(newResource.id, dispatch.incidentId, actor);
+    let oldResourceReleased = false;
+    let newResourceAllocated = false;
 
-    // Save history
-    const historyItem: DispatchReassignment = {
-      previousResourceId,
-      newResourceId,
-      reassignedBy: actor.name,
-      reassignedAt: new Date().toISOString(),
-      reason
-    };
+    try {
+      // 1. Release old resource
+      db.releaseResource(previousResourceId, actor);
+      oldResourceReleased = true;
 
-    const updatedHistory = [...(dispatch.reassignmentHistory || []), historyItem];
+      // Allow simulated failure for unit regression testing
+      if ((actor as any)._simulateFailureStep === 'AFTER_RELEASE') {
+        throw new Error('Simulated failure after releasing old resource');
+      }
 
-    const updates: Partial<Dispatch> = {
-      resourceId: newResource.id,
-      routeInfo: match.routeInfo,
-      status: 'DISPATCHED', // Reset to dispatched for the new resource responder
-      reassignmentHistory: updatedHistory,
-      updatedAt: new Date().toISOString()
-    };
+      // 2. Allocate new resource
+      db.allocateResource(newResource.id, dispatch.incidentId, actor);
+      newResourceAllocated = true;
 
-    if (dispatch.auditInfo) {
-      updates.auditInfo = {
-        ...dispatch.auditInfo,
-        updatedActorId: actor.userId,
-        updatedActorRole: actor.role
+      if ((actor as any)._simulateFailureStep === 'AFTER_ALLOCATE') {
+        throw new Error('Simulated failure after allocating new resource');
+      }
+
+      // 3. Save history & dispatch updates
+      const historyItem: DispatchReassignment = {
+        previousResourceId,
+        newResourceId,
+        reassignedBy: actor.name,
+        reassignedAt: new Date().toISOString(),
+        reason
       };
+
+      const updatedHistory = [...(dispatch.reassignmentHistory || []), historyItem];
+
+      const updates: Partial<Dispatch> = {
+        resourceId: newResource.id,
+        routeInfo: match.routeInfo,
+        status: 'DISPATCHED', // Reset to dispatched for the new resource responder
+        reassignmentHistory: updatedHistory,
+        updatedAt: new Date().toISOString()
+      };
+
+      if (dispatch.auditInfo) {
+        updates.auditInfo = {
+          ...dispatch.auditInfo,
+          updatedActorId: actor.userId,
+          updatedActorRole: actor.role
+        };
+      }
+
+      if ((actor as any)._simulateFailureStep === 'DURING_UPDATE') {
+        throw new Error('Simulated failure during dispatch update');
+      }
+
+      const updated = db.updateDispatch(dispatchId, updates);
+      if (!updated) {
+        throw new Error(`Failed to save reassignment updates`);
+      }
+
+      // 4. Log Audit log
+      db.logAudit({
+        actorId: actor.userId,
+        actorRole: actor.role,
+        actorEmail: actor.name,
+        action: 'DISPATCH_REASSIGNED',
+        entityType: 'Dispatch',
+        entityId: dispatchId,
+        details: `Reassigned dispatch ${dispatchId} from Resource ${previousResourceId} to Resource ${newResourceId}. Reason: ${reason}`
+      });
+
+      return updated;
+    } catch (err) {
+      console.warn(`[SentinelGrid Dispatch] Reassignment failed for dispatch ${dispatchId}. Executing atomic rollback...`, (err as any)?.message);
+      try {
+        if (oldResourceReleased) {
+          db.replaceResource(previousResourceSnapshot);
+        }
+        if (newResourceAllocated) {
+          db.replaceResource(newResourceSnapshot);
+        }
+        db.replaceDispatch(dispatchSnapshot);
+      } catch (rollbackErr) {
+        console.error('[SentinelGrid Dispatch] Critical error during reassignment rollback:', rollbackErr);
+      }
+      throw err;
     }
-
-    const updated = db.updateDispatch(dispatchId, updates);
-    if (!updated) {
-      throw new Error(`Failed to save reassignment updates`);
-    }
-
-    // Log Audit log
-    db.logAudit({
-      actorId: actor.userId,
-      actorRole: actor.role,
-      actorEmail: actor.name,
-      action: 'DISPATCH_REASSIGNED',
-      entityType: 'Dispatch',
-      entityId: dispatchId,
-      details: `Reassigned dispatch ${dispatchId} from Resource ${previousResourceId} to Resource ${newResourceId}. Reason: ${reason}`
-    });
-
-    return updated;
   }
 }
 

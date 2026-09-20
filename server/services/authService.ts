@@ -8,22 +8,33 @@ import { User, UserRole } from '../db/schema.ts';
  * Retrieve or generate a cryptographically secure 32-byte auth secret.
  * Stored locally at data/.auth_secret with restricted permissions (0600)
  * when process.env.AUTH_SECRET is not provided.
+ *
+ * Policy:
+ * - If AUTH_SECRET is supplied via environment, it must contain at least 64 characters
+ *   (corresponding to 32-byte hexadecimal secret representation). If too short, FAIL CLOSED.
+ * - If absent, a cryptographically secure 32-byte (64 hex characters) secret is generated
+ *   and saved to data/.auth_secret with restrictive permissions (0600).
  */
-function getOrCreateAuthSecret(): string {
-  if (process.env.AUTH_SECRET && process.env.AUTH_SECRET.trim().length >= 16) {
-    return process.env.AUTH_SECRET.trim();
+export function getOrCreateAuthSecret(customEnvSecret?: string, customSecretPath?: string): string {
+  const envSecret = customEnvSecret !== undefined ? customEnvSecret : process.env.AUTH_SECRET;
+  if (envSecret !== undefined && envSecret !== '') {
+    const trimmed = envSecret.trim();
+    if (trimmed.length < 64) {
+      throw new Error('AUTH_SECRET environment variable is too short. It must be at least 64 characters (32-byte hex representation).');
+    }
+    return trimmed;
   }
 
-  const secretFilePath = path.join(process.cwd(), 'data', '.auth_secret');
+  const secretFilePath = customSecretPath || path.join(process.cwd(), 'data', '.auth_secret');
   try {
-    const dataDir = path.join(process.cwd(), 'data');
+    const dataDir = path.dirname(secretFilePath);
     if (!fs.existsSync(dataDir)) {
       fs.mkdirSync(dataDir, { recursive: true });
     }
 
     if (fs.existsSync(secretFilePath)) {
       const secret = fs.readFileSync(secretFilePath, 'utf-8').trim();
-      if (secret.length >= 32) {
+      if (secret.length >= 64) {
         return secret;
       }
     }
@@ -36,9 +47,7 @@ function getOrCreateAuthSecret(): string {
   }
 }
 
-const TOKEN_SECRET = getOrCreateAuthSecret();
-
-interface AuthTokenPayload {
+export interface AuthTokenPayload {
   userId: string;
   email: string;
   role: UserRole;
@@ -47,6 +56,19 @@ interface AuthTokenPayload {
 }
 
 export class AuthService {
+  private tokenSecret: string | null = null;
+
+  public getAuthSecret(): string {
+    if (!this.tokenSecret) {
+      this.tokenSecret = getOrCreateAuthSecret();
+    }
+    return this.tokenSecret;
+  }
+
+  public setAuthSecretForTesting(secret: string | null): void {
+    this.tokenSecret = secret;
+  }
+
   /**
    * Secure password hashing using Node.js built-in scrypt
    */
@@ -73,7 +95,8 @@ export class AuthService {
       exp: Date.now() + 1000 * 60 * 60 * 24 * 7 // 7 days
     };
     const encodedPayload = Buffer.from(JSON.stringify(payload)).toString('base64url');
-    const signature = crypto.createHmac('sha256', TOKEN_SECRET).update(encodedPayload).digest('base64url');
+    const secret = this.getAuthSecret();
+    const signature = crypto.createHmac('sha256', secret).update(encodedPayload).digest('base64url');
     return `${encodedPayload}.${signature}`;
   }
 
@@ -86,7 +109,8 @@ export class AuthService {
       const parts = token.split('.');
       if (parts.length !== 2) return null;
       const [encodedPayload, signature] = parts;
-      const expectedSignature = crypto.createHmac('sha256', TOKEN_SECRET).update(encodedPayload).digest('base64url');
+      const secret = this.getAuthSecret();
+      const expectedSignature = crypto.createHmac('sha256', secret).update(encodedPayload).digest('base64url');
       const sigBuf = Buffer.from(signature);
       const expSigBuf = Buffer.from(expectedSignature);
       if (sigBuf.length !== expSigBuf.length || !crypto.timingSafeEqual(sigBuf, expSigBuf)) {
@@ -116,6 +140,10 @@ export class AuthService {
       hasAdmin,
       nextRole: hasAdmin ? 'OPERATOR' : 'ADMIN'
     };
+  }
+
+  public getBootstrapStatus(): { hasAdmin: boolean; nextRole: UserRole } {
+    return this.getRegistrationStatus();
   }
 
   public register(params: {
@@ -156,7 +184,7 @@ export class AuthService {
     const assignedRole: UserRole = hasAdmin ? 'OPERATOR' : 'ADMIN';
 
     const { hash, salt } = this.hashPassword(params.password);
-    const id = `usr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const id = `usr_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
     const now = new Date().toISOString();
 
     const newUser: User = {
@@ -220,10 +248,6 @@ export class AuthService {
     const token = this.generateToken(user);
     const { passwordHash: _, salt: __, ...sanitizedUser } = user;
     return { user: sanitizedUser, token };
-  }
-
-  public getAuthSecret(): string {
-    return TOKEN_SECRET;
   }
 
   public isTokenRevoked(token: string): boolean {

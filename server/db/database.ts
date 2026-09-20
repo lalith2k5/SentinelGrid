@@ -171,6 +171,8 @@ function createInitialSchema(): DatabaseSchema {
 class LocalDatabase {
   private data: DatabaseSchema;
   private isInitialized = false;
+  private status: 'OPERATIONAL' | 'DATABASE_UNAVAILABLE' = 'DATABASE_UNAVAILABLE';
+  private initError: string | null = null;
   private dbFilePath = DB_FILE;
 
   constructor() {
@@ -180,13 +182,28 @@ class LocalDatabase {
   public resetForTesting(customFilePath?: string): void {
     this.dbFilePath = customFilePath || DB_FILE;
     this.isInitialized = false;
+    this.status = 'DATABASE_UNAVAILABLE';
+    this.initError = null;
     this.initSync();
   }
 
+  public simulateDatabaseFailure(errorMessage = 'Simulated database persistence failure'): void {
+    this.isInitialized = false;
+    this.status = 'DATABASE_UNAVAILABLE';
+    this.initError = errorMessage;
+  }
+
+  public assertOperational(): void {
+    if (!this.isInitialized || this.status === 'DATABASE_UNAVAILABLE') {
+      throw new Error(`DATABASE_UNAVAILABLE: Database persistence is currently unavailable${this.initError ? ` (${this.initError})` : ''}`);
+    }
+  }
+
   public initSync(): void {
-    if (this.isInitialized) return;
+    if (this.isInitialized && this.status === 'OPERATIONAL') return;
 
     try {
+      this.initError = null;
       const dataDir = path.dirname(this.dbFilePath);
       if (!fs.existsSync(dataDir)) {
         fs.mkdirSync(dataDir, { recursive: true });
@@ -241,17 +258,20 @@ class LocalDatabase {
             console.error('[SentinelGrid DB] Failed to create backup of corrupt file:', backupErr);
           }
           this.data = createInitialSchema();
-          this.saveSync();
+          this.saveSync(true);
         }
       } else {
-        this.saveSync();
+        this.saveSync(true);
       }
       this.isInitialized = true;
+      this.status = 'OPERATIONAL';
       console.log(`[SentinelGrid DB] Local persistence ready at: ${this.dbFilePath}`);
-    } catch (err) {
+    } catch (err: any) {
       console.error('[SentinelGrid DB] Initialization error:', err);
-      // Fallback in-memory
-      this.isInitialized = true;
+      // Explicitly enter database-unavailable / degraded state: NO silent in-memory fallback
+      this.isInitialized = false;
+      this.status = 'DATABASE_UNAVAILABLE';
+      this.initError = err?.message || 'Database initialization failed';
     }
   }
 
@@ -259,7 +279,10 @@ class LocalDatabase {
     this.initSync();
   }
 
-  private saveSync(): void {
+  private saveSync(isInitializing = false): void {
+    if (!isInitializing) {
+      this.assertOperational();
+    }
     try {
       const dataDir = path.dirname(this.dbFilePath);
       if (!fs.existsSync(dataDir)) {
@@ -268,25 +291,31 @@ class LocalDatabase {
       const tmpFile = `${this.dbFilePath}.tmp`;
       fs.writeFileSync(tmpFile, JSON.stringify(this.data, null, 2), 'utf-8');
       fs.renameSync(tmpFile, this.dbFilePath);
-    } catch (err) {
+    } catch (err: any) {
       console.error('[SentinelGrid DB] Save error:', err);
+      this.status = 'DATABASE_UNAVAILABLE';
+      this.isInitialized = false;
+      this.initError = err?.message || 'Database persistence save failure';
+      throw new Error(`DATABASE_UNAVAILABLE: Failed to persist database write: ${err?.message || 'Unknown save error'}`);
     }
   }
 
   public getStatus() {
     return {
-      connected: this.isInitialized,
+      connected: this.isInitialized && this.status === 'OPERATIONAL',
       isInitialized: this.isInitialized,
+      status: this.status,
+      error: this.initError,
       type: 'Local File JSON Engine (Zero Cloud / Offline)',
       filePath: this.dbFilePath,
       counts: {
-        users: this.data.users.length,
-        incidents: this.data.incidents.length,
-        resources: this.data.resources.length,
-        responders: this.data.responders.length,
-        meshNodes: this.data.meshNodes.length,
-        knowledgeDocuments: this.data.knowledgeDocuments.length,
-        auditLogs: this.data.auditLogs.length
+        users: this.data?.users ? this.data.users.length : 0,
+        incidents: this.data?.incidents ? this.data.incidents.length : 0,
+        resources: this.data?.resources ? this.data.resources.length : 0,
+        responders: this.data?.responders ? this.data.responders.length : 0,
+        meshNodes: this.data?.meshNodes ? this.data.meshNodes.length : 0,
+        knowledgeDocuments: this.data?.knowledgeDocuments ? this.data.knowledgeDocuments.length : 0,
+        auditLogs: this.data?.auditLogs ? this.data.auditLogs.length : 0
       }
     };
   }
@@ -305,6 +334,7 @@ class LocalDatabase {
   }
 
   public insertUser(user: User): User {
+    this.assertOperational();
     this.data.users.push(user);
     this.saveSync();
     return user;
@@ -320,6 +350,7 @@ class LocalDatabase {
   }
 
   public insertIncident(incident: Incident, location?: IncidentLocation): Incident {
+    this.assertOperational();
     if (location) {
       this.data.incidentLocations.push(location);
     }
@@ -329,6 +360,7 @@ class LocalDatabase {
   }
 
   public updateIncident(id: string, updates: Partial<Incident>): Incident | undefined {
+    this.assertOperational();
     const idx = this.data.incidents.findIndex(i => i.id === id);
     if (idx === -1) return undefined;
     this.data.incidents[idx] = {
@@ -341,6 +373,7 @@ class LocalDatabase {
   }
 
   public deleteIncident(id: string): boolean {
+    this.assertOperational();
     const idx = this.data.incidents.findIndex(i => i.id === id);
     if (idx === -1) return false;
     this.data.incidents.splice(idx, 1);
@@ -435,12 +468,14 @@ class LocalDatabase {
   }
 
   public insertResource(resource: Resource): Resource {
+    this.assertOperational();
     this.data.resources.push(resource);
     this.saveSync();
     return this.normalizeResource(resource);
   }
 
   public updateResource(id: string, updates: Partial<Resource>): Resource | undefined {
+    this.assertOperational();
     const idx = this.data.resources.findIndex(r => r.id === id || (r.resourceCode && r.resourceCode.toUpperCase() === id.toUpperCase()));
     if (idx === -1) return undefined;
     this.data.resources[idx] = {
@@ -450,6 +485,20 @@ class LocalDatabase {
     };
     this.saveSync();
     return this.normalizeResource(this.data.resources[idx]);
+  }
+
+  public replaceResource(resource: Resource): Resource {
+    this.assertOperational();
+    const idx = this.data.resources.findIndex(
+      r => r.id === resource.id || (r.resourceCode && r.resourceCode.toUpperCase() === resource.id.toUpperCase())
+    );
+    if (idx !== -1) {
+      this.data.resources[idx] = JSON.parse(JSON.stringify(resource));
+    } else {
+      this.data.resources.push(JSON.parse(JSON.stringify(resource)));
+    }
+    this.saveSync();
+    return this.normalizeResource(this.data.resources[idx !== -1 ? idx : this.data.resources.length - 1]);
   }
 
   public getResponders(): Responder[] {
@@ -463,6 +512,7 @@ class LocalDatabase {
   }
 
   public insertResponder(responder: Responder): Responder {
+    this.assertOperational();
     this.data.responders = this.data.responders || [];
     this.data.responders.push(responder);
     this.saveSync();
@@ -474,6 +524,7 @@ class LocalDatabase {
     incidentId: string,
     actor?: { userId?: string; role?: string; name?: string }
   ): Resource {
+    this.assertOperational();
     const resIdx = this.data.resources.findIndex(
       r => r.id === resourceId || (r.resourceCode && r.resourceCode.toUpperCase() === resourceId.toUpperCase())
     );
@@ -550,6 +601,7 @@ class LocalDatabase {
     resourceId: string,
     actor?: { userId?: string; role?: string; name?: string }
   ): Resource {
+    this.assertOperational();
     const resIdx = this.data.resources.findIndex(
       r => r.id === resourceId || (r.resourceCode && r.resourceCode.toUpperCase() === resourceId.toUpperCase())
     );
@@ -1139,6 +1191,7 @@ class LocalDatabase {
   }
 
   public insertDispatch(dispatch: Dispatch): Dispatch {
+    this.assertOperational();
     this.data.dispatches = this.data.dispatches || [];
     this.data.dispatches.push(dispatch);
     this.saveSync();
@@ -1146,6 +1199,7 @@ class LocalDatabase {
   }
 
   public updateDispatch(id: string, updates: Partial<Dispatch>): Dispatch | undefined {
+    this.assertOperational();
     this.data.dispatches = this.data.dispatches || [];
     const idx = this.data.dispatches.findIndex(d => d.dispatchId === id);
     if (idx === -1) return undefined;
@@ -1156,6 +1210,19 @@ class LocalDatabase {
     };
     this.saveSync();
     return this.data.dispatches[idx];
+  }
+
+  public replaceDispatch(dispatch: Dispatch): Dispatch {
+    this.assertOperational();
+    this.data.dispatches = this.data.dispatches || [];
+    const idx = this.data.dispatches.findIndex(d => d.dispatchId === dispatch.dispatchId || (d as any).id === (dispatch as any).id);
+    if (idx !== -1) {
+      this.data.dispatches[idx] = JSON.parse(JSON.stringify(dispatch));
+    } else {
+      this.data.dispatches.push(JSON.parse(JSON.stringify(dispatch)));
+    }
+    this.saveSync();
+    return { ...this.data.dispatches[idx !== -1 ? idx : this.data.dispatches.length - 1] };
   }
 
   public clearDispatches(): void {

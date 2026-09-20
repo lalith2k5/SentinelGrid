@@ -119,7 +119,7 @@ SentinelGrid implements a complete Computer-Aided Dispatch (CAD) and responder w
 - **Reassignment Workflow**: `ADMIN` and `DISPATCHER` roles can reassign dispatches to new resources, atomically updating resource states (`ASSIGNED` vs `AVAILABLE`) and preserving reassignment history.
 - **Field Completion Reports**: Completed dispatches record verified victim counts and completion debrief notes directly into the permanent record.
 - **Strict Role Boundaries**: Operators cannot trigger CAD state transitions; dispatch creation and reassignment require `ADMIN` or `DISPATCHER` roles.
-- **Persistent Audit Logs**: Every dispatch creation, transition, and reassignment creates immutable, sequential audit entries.
+- **Persistent Audit Logs**: Every dispatch creation, transition, and reassignment creates append-only, sequential audit entries.
 
 ---
 
@@ -246,6 +246,22 @@ All authorization checks in SentinelGrid are strictly enforced **server-side**:
 | **DISPATCHER** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ (403) | ✅ | ❌ (403) |
 | **RESPONDER** | ❌ (403) | ✅ | ❌ (403) | ❌ (403) | ❌ (403) | ✅ (Assigned Only) | ✅ | ❌ (403) | ❌ (403) | ❌ (403) | ❌ (403) |
 | **OPERATOR** | ✅ | ❌ (403) | ✅ | ✅ | ❌ (403) | ❌ (403) | ✅ | ✅ | ❌ (403) | ❌ (403) | ❌ (403) |
+
+### Initial Account Bootstrap & Credential Model
+- **Zero Default Passwords**: SentinelGrid never ships with insecure hardcoded default credentials (e.g. no `admin/admin`).
+- **First-User Administrator Bootstrap**:
+  - The first user registered in a clean deployment is automatically granted the `ADMIN` role.
+  - Subsequent registered users receive the `OPERATOR` role by default, preventing unprivileged users from self-assigning elevated roles.
+  - System Administrators can adjust user roles (`ADMIN`, `DISPATCHER`, `RESPONDER`, `OPERATOR`) and disable accounts via the Admin Management console.
+- **Cryptographic Secret Enforcement (`AUTH_SECRET`)**:
+  - If `AUTH_SECRET` is supplied via environment variables, it must contain at least 64 characters (corresponding to a 32-byte hexadecimal secret representation). If present but shorter than 64 characters, the server fails closed immediately on startup.
+  - If `AUTH_SECRET` is absent, SentinelGrid generates a cryptographically secure 32-byte (64 hex characters) secret and stores it locally at `data/.auth_secret` with restricted permissions (`0600`).
+- **Database Persistence & Availability Safeguards**:
+  - The local database engine explicitly enters a `DATABASE_UNAVAILABLE` degraded state if the storage directory or JSON file cannot be initialized or written.
+  - Write and mutation operations fail closed (`DATABASE_UNAVAILABLE: Database persistence is currently unavailable`) instead of silently operating in volatile memory.
+  - Corrupted JSON database files are automatically backed up with a timestamp before clean state re-initialization.
+- **Atomic Dispatch Reassignment Safety**:
+  - Reassignment of emergency dispatches executes with an atomic rollback safety wrapper. If allocation of the new resource or updating of the dispatch record fails, the prior resource allocation and dispatch state are restored cleanly. Neither resource is left orphaned or double-allocated.
 
 ### Key Security Safeguards:
 - **Password Hashing**: Uses Node.js `crypto.scryptSync` with a cryptographically secure 16-byte random salt and 64-byte derived key length.

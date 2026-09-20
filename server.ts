@@ -1,6 +1,6 @@
 import express from 'express';
 import path from 'path';
-import { createServer as createViteServer } from 'vite';
+import fs from 'fs';
 import { db } from './server/db/database.ts';
 import authRoutes from './server/routes/authRoutes.ts';
 import incidentRoutes from './server/routes/incidentRoutes.ts';
@@ -11,7 +11,7 @@ import routingRoutes from './server/routes/routingRoutes.ts';
 import dispatchRoutes from './server/routes/dispatchRoutes.ts';
 import mapRoutes from './server/routes/mapRoutes.ts';
 
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 async function startServer() {
   // Initialize local persistence
@@ -23,15 +23,18 @@ async function startServer() {
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
 
-  // API Health Check
-  app.get('/api/health', (_req, res) => {
+  // API Health Checks (both /healthz and /api/health for platform probes)
+  const healthHandler = (_req: express.Request, res: express.Response) => {
     res.json({
       status: 'ok',
       platform: 'SentinelGrid Foundation',
       mode: 'OFFLINE-FIRST',
       time: new Date().toISOString()
     });
-  });
+  };
+
+  app.get('/healthz', healthHandler);
+  app.get('/api/health', healthHandler);
 
   // Mount API routers
   app.use('/api/auth', authRoutes);
@@ -43,15 +46,19 @@ async function startServer() {
   app.use('/api/dispatches', dispatchRoutes);
   app.use('/api/map', mapRoutes);
 
-  // Vite integration
+  // Vite development integration vs production static serving
   if (process.env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa'
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
+    const distPath = fs.existsSync(path.join(__dirname, 'index.html'))
+      ? __dirname
+      : path.join(process.cwd(), 'dist');
+
     app.use(express.static(distPath));
     app.get('*', (_req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
