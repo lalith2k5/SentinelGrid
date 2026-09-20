@@ -30,7 +30,7 @@ Phase 7 extends the foundational Phase 4 local graph routing engine into a compl
 
 ### Offline Map Dataset
 - **Graph Topology**: 25 discrete road nodes (`N-01` through `N-25`) and 35 directed road edges (`E-01` through `E-35`).
-- **Operational Bounding Box**: Covers `[minLat: 12.9600, maxLat: 12.9850, minLng: 77.5850, maxLng: 77.6200]`.
+- **Operational Bounding Box**: Covers synthetic grid coordinates `[minLat: 9.9700, maxLat: 10.0600, minLng: 9.9700, maxLng: 10.0600]`.
 - **Road Classifications**: Multi-tier infrastructure including `HIGHWAY`, `PRIMARY`, `SECONDARY`, `BRIDGE`, `TUNNEL`, and `LOCAL` streets with realistic speed limits and traversal penalties.
 - **Directionality**: Directed edges supporting both `BIDIRECTIONAL` corridors and strictly enforced `ONE_WAY` passages.
 - **Travel-Time Metadata**: Base edge travel durations calculated deterministically from distance and road classification speeds.
@@ -248,11 +248,15 @@ All authorization checks in SentinelGrid are strictly enforced **server-side**:
 | **OPERATOR** | ✅ | ❌ (403) | ✅ | ✅ | ❌ (403) | ❌ (403) | ✅ | ✅ | ❌ (403) | ❌ (403) | ❌ (403) |
 
 ### Key Security Safeguards:
+- **Password Hashing**: Uses Node.js `crypto.scryptSync` with a cryptographically secure 16-byte random salt and 64-byte derived key length.
+- **Session Tokens**: Uses signed HMAC-SHA256 tokens with timing-safe signature comparison (`crypto.timingSafeEqual`).
 - **Authoritative Database Role Resolution**: Tokens verify identity (`userId`), but the user's role is always re-queried from the local database on each request.
 - **Disabled Account Rejection**: Disabled accounts are instantly rejected at the authentication layer.
 - **Last Administrator Protection**: The system prevents demoting or deleting the final remaining administrator account.
 - **Revoked Token Hashing**: Revoked session tokens are stored as cryptographic SHA-256 hashes (`64 hex characters`).
-- **Protected System Endpoints**: All triage, mesh, and system routes enforce authentication and granular role checks.
+- **Protected System Endpoints**: All triage, mesh, routing, dispatch, and system routes enforce authentication and granular role checks.
+- **Append-Only Audit Logging**: System operations generate sequential audit log records in the local database. Note: While append-only at the application layer, local database files are not cryptographically signed/immutable against direct host filesystem edits.
+- **AI Provider Boundary**: `LocalHeuristicProvider` is the sole active operational triage provider. Cloud `GeminiProvider` and local `LocalModelProvider` exist as inactive extension stubs with zero runtime invocation.
 
 ---
 

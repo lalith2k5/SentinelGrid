@@ -222,9 +222,21 @@ class LocalDatabase {
         } catch (parseErr) {
           console.warn('[SentinelGrid DB] Corrupted database JSON file detected. Creating backup and re-initializing clean database...', parseErr);
           try {
-            const backupFile = path.join(dataDir, `sentinelgrid.corrupt.${Date.now()}.json`);
+            const baseName = path.basename(this.dbFilePath, '.json');
+            const backupFile = path.join(dataDir, `${baseName}.corrupt.${Date.now()}.json`);
             fs.copyFileSync(this.dbFilePath, backupFile);
             console.log(`[SentinelGrid DB] Corrupted database backed up to: ${backupFile}`);
+
+            // Bound corrupt backups to at most 3 to avoid unbounded disk accumulation
+            const existingBackups = fs.readdirSync(dataDir)
+              .filter(f => f.startsWith(`${baseName}.corrupt.`) && f.endsWith('.json'))
+              .sort()
+              .reverse();
+            if (existingBackups.length > 3) {
+              for (const oldBackup of existingBackups.slice(3)) {
+                try { fs.unlinkSync(path.join(dataDir, oldBackup)); } catch {}
+              }
+            }
           } catch (backupErr) {
             console.error('[SentinelGrid DB] Failed to create backup of corrupt file:', backupErr);
           }
@@ -809,7 +821,7 @@ class LocalDatabase {
   public logAudit(log: Omit<AuditLog, 'id' | 'timestamp'>): AuditLog {
     const newLog: AuditLog = {
       ...log,
-      id: `audit_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      id: `audit_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`,
       timestamp: new Date().toISOString()
     };
     this.data.auditLogs.unshift(newLog);
@@ -949,7 +961,7 @@ class LocalDatabase {
     this.data.meshEvents = this.data.meshEvents || [];
     const newEvent: SimulatedMeshEvent = {
       ...event,
-      eventId: `EVT-${Date.now()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
+      eventId: `EVT-${Date.now()}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`,
       timestamp: new Date().toISOString()
     };
     this.data.meshEvents.unshift(newEvent);
@@ -1024,7 +1036,7 @@ class LocalDatabase {
     this.data.hazards = this.data.hazards || [];
     const normalizedHazard = {
       ...hazard,
-      hazardId: hazard.hazardId || (hazard as any).id || `haz-${Date.now()}`
+      hazardId: hazard.hazardId || (hazard as any).id || `haz-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`
     };
     this.data.hazards.push(normalizedHazard);
     if (this.data.hazards.length > 500) {
@@ -1064,7 +1076,7 @@ class LocalDatabase {
     this.data.blockedRoads = this.data.blockedRoads || [];
     const normalized = {
       ...br,
-      blockedRoadId: br.blockedRoadId || (br as any).id || `blk-${Date.now()}`
+      blockedRoadId: br.blockedRoadId || (br as any).id || `blk-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`
     };
     this.data.blockedRoads.push(normalized);
     if (this.data.blockedRoads.length > 500) {

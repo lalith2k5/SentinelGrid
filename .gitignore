@@ -8,3 +8,6 @@ coverage/
 !.env.example
 .auth_secret
 data/.auth_secret
+data/*.json
+data/*.corrupt.*.json
+!data/.gitkeep

@@ -72,7 +72,7 @@ export const AnalyticsPage: React.FC = () => {
               Operational Research & Performance Metrics
             </h1>
             <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">
-              Phase 10 Foundation
+              Future Roadmap (Phase 10)
             </span>
           </div>
           <p className="text-xs text-slate-400 font-mono mt-0.5">

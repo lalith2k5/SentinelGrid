@@ -87,7 +87,11 @@ export class AuthService {
       if (parts.length !== 2) return null;
       const [encodedPayload, signature] = parts;
       const expectedSignature = crypto.createHmac('sha256', TOKEN_SECRET).update(encodedPayload).digest('base64url');
-      if (signature !== expectedSignature) return null;
+      const sigBuf = Buffer.from(signature);
+      const expSigBuf = Buffer.from(expectedSignature);
+      if (sigBuf.length !== expSigBuf.length || !crypto.timingSafeEqual(sigBuf, expSigBuf)) {
+        return null;
+      }
 
       const payload: AuthTokenPayload = JSON.parse(Buffer.from(encodedPayload, 'base64url').toString('utf-8'));
       if (payload.exp < Date.now()) return null;
