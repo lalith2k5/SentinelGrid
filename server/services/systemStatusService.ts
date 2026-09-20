@@ -29,9 +29,11 @@ export class SystemStatusService {
       {
         id: 'local_database',
         name: 'Local Database',
-        state: 'OPERATIONAL',
-        stateLabel: 'Operational (Local File Engine)',
-        badgeType: 'success',
+        state: dbStatus.status === 'DATABASE_UNAVAILABLE' ? 'DEGRADED' : 'OPERATIONAL',
+        stateLabel: dbStatus.status === 'DATABASE_UNAVAILABLE'
+          ? 'Degraded (Database Unavailable)'
+          : 'Operational (Local File Engine)',
+        badgeType: dbStatus.status === 'DATABASE_UNAVAILABLE' ? 'warning' : 'success',
         phase: 1,
         details: `Zero-cloud local storage at ${dbStatus.filePath}. Running seamlessly on local filesystem.`,
         offlineCapable: true
