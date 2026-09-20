@@ -67,23 +67,43 @@ export class SystemStatusService {
         offlineCapable: true
       },
       {
-        id: 'knowledge_base',
-        name: 'Knowledge Base',
-        state: 'NOT_CONFIGURED',
-        stateLabel: 'Not configured (Phase 4)',
-        badgeType: 'neutral',
-        phase: 4,
-        details: ragKnowledgeService.getInfo().statusText,
+        id: 'resource_matching',
+        name: 'Resource Matching Engine',
+        state: 'OPERATIONAL',
+        stateLabel: 'Operational (Phase 5 Decision Support)',
+        badgeType: 'success',
+        phase: 5,
+        details: resourceMatchingService.getInfo().statusText,
+        offlineCapable: true
+      },
+      {
+        id: 'dispatch_system',
+        name: 'CAD & Dispatch System',
+        state: 'OPERATIONAL',
+        stateLabel: 'Operational (Phase 6 Workflow)',
+        badgeType: 'success',
+        phase: 6,
+        details: dispatchService.getInfo().statusText,
         offlineCapable: true
       },
       {
         id: 'map_system',
-        name: 'Offline GIS & Routing',
+        name: 'Offline GIS & Operational Map',
         state: 'OPERATIONAL',
-        stateLabel: 'Operational (Phase 4)',
+        stateLabel: 'Operational (Phase 7 GIS Engine)',
         badgeType: 'success',
-        phase: 4,
-        details: routingService.getInfo().statusText,
+        phase: 7,
+        details: 'Deterministic synthetic road network (25 nodes, 35 edges), 8 operational layers, multi-mode routing (FASTEST/SAFEST/BALANCED).',
+        offlineCapable: true
+      },
+      {
+        id: 'knowledge_base',
+        name: 'Knowledge Base',
+        state: 'NOT_CONFIGURED',
+        stateLabel: 'Future (Phase 8+)',
+        badgeType: 'neutral',
+        phase: 8,
+        details: ragKnowledgeService.getInfo().statusText,
         offlineCapable: true
       }
     ];
@@ -101,7 +121,7 @@ export class SystemStatusService {
 
     return {
       systemMode: 'OFFLINE-FIRST',
-      platform: 'SentinelGrid Foundation (Phase 1)',
+      platform: 'SentinelGrid Operations Platform (Phases 1–7)',
       zeroCloudCompliance: true,
       timestamp: new Date().toISOString(),
       subsystems,
@@ -111,7 +131,7 @@ export class SystemStatusService {
         connectedMeshNodes: db.getSimulatedNodes().filter(n => n.status === 'ONLINE').length,
         availableResponders: db.getStatus().counts.responders,
         availableResources: db.getResources().filter(r => r.availability === 'AVAILABLE').length,
-        pendingDispatches: 0
+        pendingDispatches: db.getDispatches().filter(d => d.status === 'PENDING').length
       },
       allPlaceholders
     };

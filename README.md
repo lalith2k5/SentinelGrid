@@ -19,7 +19,107 @@ SentinelGrid is designed to continue operating without internet, cellular connec
    - **Phase 4 & 4.1 (Completed & Hardened)**: Offline GIS Foundation & Hazard-Aware Routing — Local graph map provider, synthetic offline road network, `MAX_SNAP_DISTANCE_METERS` (5000m) snapping distance boundary, Dijkstra shortest/safest path calculation engine, hazard penalty cost functions, truthful active network blocked road accounting, explainable route selection, persistent hazard & blocked road management, interactive SVG map visualization, and RBAC-protected routing API.
    - **Phase 5 & 5.1 & 5.1.1 (Completed & Hardened)**: Resource Matching & Allocation — Local multi-factor deterministic scoring, structured capacity verification by resource type, eligibility and routing safety checks, explainable resource recommendations, local stateful allocation & release, strict dispatcher/admin/operator RBAC limits, and audit logs.
    - **Phase 6 & 6.1 & 6.1.1 (Completed & Hardened)**: Offline Dispatch, Responder Workflows & Authoritative Ownership Hardening — Real-time state machine transitions, strict server-side owner validation for responders, standard HTTP status alignment, robust input safeguards, and full regression testing suite.
-   - **Future Phases (Not in Scope / Roadmap Only)**: Phase 7 Offline Operational GIS / Map & Routing expansion, real Meshtastic/LoRa physical hardware interfaces, satellite failover, and acoustic detection.
+   - **Phase 7 (Completed & Hardened)**: Offline Operational GIS & Map Expansion — Extended 25-node, 35-road synthetic topology, 8 operational layers, multi-mode routing comparison (FASTEST, SAFEST, BALANCED), operational overlay mapping with location-unavailable handling, diagnostic telemetry, and RBAC-protected map management.
+   - **Future Roadmap (Phase 8+ — Not Implemented / Out of Scope)**: Phase 8 Offline Emergency Knowledge Base & RAG Vector Search, Phase 9 Incident Corroboration & Verification, Phase 10 Operations Analytics, real Meshtastic/LoRa physical hardware transceivers, satellite failover, and acoustic detection.
+
+---
+
+## Phase 7 — Offline Operational GIS & Map Expansion
+
+Phase 7 extends the foundational Phase 4 local graph routing engine into a complete, operational offline GIS interface for incident command, situational awareness, and multi-mode route planning.
+
+### Offline Map Dataset
+- **Graph Topology**: 25 discrete road nodes (`N-01` through `N-25`) and 35 directed road edges (`E-01` through `E-35`).
+- **Operational Bounding Box**: Covers `[minLat: 12.9600, maxLat: 12.9850, minLng: 77.5850, maxLng: 77.6200]`.
+- **Road Classifications**: Multi-tier infrastructure including `HIGHWAY`, `PRIMARY`, `SECONDARY`, `BRIDGE`, `TUNNEL`, and `LOCAL` streets with realistic speed limits and traversal penalties.
+- **Directionality**: Directed edges supporting both `BIDIRECTIONAL` corridors and strictly enforced `ONE_WAY` passages.
+- **Travel-Time Metadata**: Base edge travel durations calculated deterministically from distance and road classification speeds.
+- **Deterministic Synthetic Dataset**: Version 2.0.0 synthetic operational emergency network.
+
+> **CRITICAL OPERATIONAL NOTICE**:
+> **THE CURRENT MAP DATASET IS SYNTHETIC AND IS FOR OFFLINE DEVELOPMENT, TESTING, AND DEMONSTRATION.**
+> It does not represent real-world geographic coverage. All coordinates, street labels, and topology belong to a simulated local sector.
+
+### 8 Operational Map Layers
+SentinelGrid manages 8 independent operational layers with dynamic visibility toggling:
+1. `BASE_MAP`: Local coordinate reference grid, bounding box boundary, and background sector styling.
+2. `ROADS`: Road segments rendered by classification with one-way directionality indicators and status colors.
+3. `INCIDENTS`: Incident location overlays snapped to the nearest road network node.
+4. `RESOURCES`: Active staged emergency assets, displaying unit types, availability, and capacity tags.
+5. `RESPONDERS`: Field responder position markers displaying unit telemetry and offline simulation status.
+6. `HAZARDS`: Active environmental and physical threats (`FLOOD`, `FIRE`, `LANDSLIDE`, `CHEMICAL_SPILL`, `STRUCTURAL_COLLAPSE`, `DOWNED_POWER_LINE`) with dynamic danger radii and severity styling.
+7. `BLOCKED_ROADS`: Impassable road segments with physical blockage indicators.
+8. `ACTIVE_ROUTE`: Live navigation trajectories and multi-mode route comparison paths.
+
+### Operational Objects
+- **Incidents**: Real incident coordinates mapped to the road graph. Incidents with missing or `(0,0)` coordinates are identified as `isLocationUnavailable: true` without artificial fallback.
+- **Resources**: Equipment, vehicles, and medical units mapped with actual database capacities and operational capabilities.
+- **Responders**: Field responder markers labeled with `locationStatus: SIMULATED_OFFLINE_POSITION`, clearly distinguishing simulated responder telemetry from live physical GPS feeds.
+- **Hazards**: Threat perimeters evaluated for edge intersections and route avoidance.
+- **Blocked Roads**: Active road segment closures blocking graph traversal.
+- **Routes**: Multi-segment paths connecting origins to destinations.
+
+### Multi-Mode Route Comparison Engine
+The Phase 7 routing engine provides parallel multi-mode evaluation comparing 3 distinct operational modes:
+- **`FASTEST`**: Optimizes for minimal travel duration (`estimatedTravelSeconds`), utilizing higher-speed roads.
+- **`SAFEST`**: Prioritizes hazard avoidance by heavily penalizing hazard proximity and routing around danger perimeters when viable alternatives exist.
+- **`BALANCED`**: Evaluates a weighted compromise between travel time and safety penalties.
+- **Operational Metrics**: Every calculated route provides total distance (meters), estimated travel time (seconds), cumulative hazard penalty, count of avoided hazards, and count of avoided road blockages.
+- **Trade-off Analysis**: Natural-language operational explanations highlight tactical differences between modes (e.g., comparing time savings against hazard exposure). No route mode is labeled "best"; incident commanders select modes based on current mission constraints.
+
+### Offline Guarantees
+- **Zero External Map Services**: No Google Maps, Mapbox, Leaflet tile servers, or online OpenStreetMap connections.
+- **Zero Remote Routing APIs**: All shortest-path and multi-mode calculations execute locally using internal graph algorithms.
+- **No Internet Required**: Map rendering, snapping, layer toggling, hazard evaluation, and route comparisons run 100% locally.
+- **Resilient Local Execution**: Core software workflows are designed to operate offline when the local computing and radio equipment remain powered.
+
+### Map Safety & Coordinate Integrity
+- **Maximum Snap Distance**: Enforces `MAX_SNAP_DISTANCE_METERS = 5000` (5 km). Coordinates beyond 5 km return an explicit `LOCATION_OUTSIDE_MAP` status without artificial snapping.
+- **Truthful Coordinate Handling**: Missing or unavailable incident/resource coordinates remain unavailable (`null` / `isLocationUnavailable: true`). SentinelGrid does not use fake `(0,0)` coordinate fallbacks.
+- **Dataset Validation**: Built-in automated validation checks for duplicate node IDs, invalid coordinate ranges, orphan edges, self-loops, and non-positive edge distances.
+- **One-Way Routing Enforcement**: Graph traversal strictly respects directed edge constraints, rejecting illegal counter-flow navigation.
+
+### Map Diagnostics & Telemetry
+The map subsystem exposes comprehensive diagnostic telemetry:
+- Operational status (`OPERATIONAL`, `DEGRADED`)
+- Dataset version and name (`2.0.0`, Synthetic Emergency Operations Grid)
+- Element counts: 25 nodes, 35 roads, active hazards, blocked roads, and overlay objects
+- Coordinate reference system (`WGS-84 Local Grid`, offline projection)
+- Automated topology validation report
+- External internet dependency status: `NONE`
+
+### Map API Endpoints
+All map endpoints require authentication (`requireAuth`):
+
+| Method | Endpoint | Description | Access / RBAC |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/map/status` | Offline map operational status, dataset metadata, and offline notice | Authenticated |
+| `GET` | `/api/map/data` | Complete operational map package (nodes, edges, layers, overlays, diagnostics) | Authenticated |
+| `GET` | `/api/map/layers` | Active layer definitions and visibility states | Authenticated |
+| `PUT` | `/api/map/layers/:layerId/visibility` | Toggle visibility for an operational layer | Authenticated |
+| `GET` | `/api/map/roads` | Authoritative road network edges with classification metadata | Authenticated |
+| `GET` | `/api/map/hazards` | Active GIS hazard perimeters | Authenticated |
+| `GET` | `/api/map/operational-objects` | Overlay objects (incidents, resources, responders, hazards, blockages) | Authenticated |
+| `GET` | `/api/map/diagnostics` | Map validation integrity, node/edge counts, and diagnostic telemetry | Authenticated |
+| `POST` | `/api/map/validate` | On-demand topology validation report | Authenticated |
+| `POST` | `/api/map/compare-routes` | Multi-mode route comparison (`FASTEST`, `SAFEST`, `BALANCED`) | Authenticated |
+| `POST` | `/api/map/hazards` | Register an active hazard perimeter | `ADMIN`, `DISPATCHER`, `OPERATOR` |
+| `DELETE` | `/api/map/hazards/:hazardId` | Remove an active hazard perimeter | `ADMIN`, `DISPATCHER`, `OPERATOR` |
+| `POST` | `/api/map/blocked-roads` | Register a blocked road obstacle | `ADMIN`, `DISPATCHER`, `OPERATOR` |
+| `DELETE` | `/api/map/blocked-roads/:blockedRoadId` | Clear a blocked road obstacle | `ADMIN`, `DISPATCHER`, `OPERATOR` |
+
+---
+
+## Phase 6, 6.1 & 6.1.1 — Offline CAD, Dispatch & Responder Workflow
+
+SentinelGrid implements a complete Computer-Aided Dispatch (CAD) and responder workflow engine with strict server-side ownership enforcement:
+
+- **9-State Lifecycle Machine**: Enforces valid transitions across `PENDING`, `DISPATCHED`, `ACKNOWLEDGED`, `EN_ROUTE`, `ARRIVED`, `ON_SCENE`, `COMPLETED`, `CANCELLED`, and `DECLINED`.
+- **Authoritative Responder Ownership**: Responders can only transition dispatches assigned to their verified resource (`responder.assignedResourceId`). Attempts to update other units' dispatches return `403 Forbidden`.
+- **Reassignment Workflow**: `ADMIN` and `DISPATCHER` roles can reassign dispatches to new resources, atomically updating resource states (`ASSIGNED` vs `AVAILABLE`) and preserving reassignment history.
+- **Field Completion Reports**: Completed dispatches record verified victim counts and completion debrief notes directly into the permanent record.
+- **Strict Role Boundaries**: Operators cannot trigger CAD state transitions; dispatch creation and reassignment require `ADMIN` or `DISPATCHER` roles.
+- **Persistent Audit Logs**: Every dispatch creation, transition, and reassignment creates immutable, sequential audit entries.
 
 ---
 
@@ -78,7 +178,7 @@ Implemented capabilities:
   - Hazard Creation: `ADMIN`, `DISPATCHER`, `OPERATOR`.
   - Hazard Deletion & Blocked Road Creation/Deletion: `ADMIN`, `DISPATCHER`.
 
-> **Operational Disclaimer**: Phase 4 and Phase 5 provide a genuinely local, deterministic route calculation and resource matching engine using a synthetic offline road graph. They do not connect to external Google Maps, OpenStreetMap, or cloud GIS services.
+> **Operational Disclaimer**: Phases 4, 5, 6, and 7 provide genuinely local, deterministic route calculation, resource matching, CAD dispatch, and operational GIS mapping using a synthetic offline road graph. They do not connect to external Google Maps, OpenStreetMap, or cloud GIS services.
 
 ---
 
@@ -140,12 +240,12 @@ During future physical hardware integration phases, radio frequency selection an
 
 All authorization checks in SentinelGrid are strictly enforced **server-side**:
 
-| Role | Incident Creation | Incident Status Update | AI Triage Execution | Resource Creation & Status | Hazard Creation | Road Block / Hazard Del | User Management | Mesh Simulation | System Diagnostics |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **ADMIN** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **DISPATCHER** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ (403) | ✅ | ❌ (403) |
-| **RESPONDER** | ❌ (403) | ✅ | ❌ (403) | ❌ (403) | ❌ (403) | ❌ (403) | ❌ (403) | ❌ (403) | ❌ (403) |
-| **OPERATOR** | ✅ | ❌ (403) | ✅ | ❌ (403) | ✅ | ❌ (403) | ❌ (403) | ❌ (403) | ❌ (403) |
+| Role | Incident Creation | Incident Status Update | AI Triage | Resource Match/Alloc | Dispatch Create/Reassign | Dispatch Status Update | Map Routing & Overlays | Map Hazard/Block Mgmt | User Management | Mesh Simulation | System Diagnostics |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **ADMIN** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **DISPATCHER** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ (403) | ✅ | ❌ (403) |
+| **RESPONDER** | ❌ (403) | ✅ | ❌ (403) | ❌ (403) | ❌ (403) | ✅ (Assigned Only) | ✅ | ❌ (403) | ❌ (403) | ❌ (403) | ❌ (403) |
+| **OPERATOR** | ✅ | ❌ (403) | ✅ | ✅ | ❌ (403) | ❌ (403) | ✅ | ✅ | ❌ (403) | ❌ (403) | ❌ (403) |
 
 ### Key Security Safeguards:
 - **Authoritative Database Role Resolution**: Tokens verify identity (`userId`), but the user's role is always re-queried from the local database on each request.

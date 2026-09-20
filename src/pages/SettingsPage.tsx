@@ -319,7 +319,7 @@ export const SettingsPage: React.FC = () => {
               <div className="text-[11px] text-slate-500 mt-1">
                 Local Ollama / Apple Silicon M2 • Zero API costs • 100% offline
               </div>
-              <div className="mt-2 text-[10px] font-mono text-amber-400">Status: Ready for Phase 3</div>
+              <div className="mt-2 text-[10px] font-mono text-emerald-400">Status: Phase 3 Completed (Local Heuristic Engine Active)</div>
             </div>
 
             <div className="p-3 bg-slate-950 border border-slate-800 rounded">
@@ -336,7 +336,7 @@ export const SettingsPage: React.FC = () => {
       {/* Application Information */}
       <div className="p-4 bg-slate-950 border border-slate-800 rounded-lg text-xs font-mono text-slate-400 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div>
-          <span className="text-slate-200 font-bold">SentinelGrid Phase 1 Foundation</span> • Built with React 19, TypeScript, Vite & Express
+          <span className="text-slate-200 font-bold">SentinelGrid Operations Platform (Phases 1–7)</span> • Built with React 19, TypeScript, Vite & Express
         </div>
         <div className="text-slate-500">
           Mac M2 / Linux Standalone Ready

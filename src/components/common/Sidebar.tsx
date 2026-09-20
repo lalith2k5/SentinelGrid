@@ -30,12 +30,12 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'incidents', label: 'Incidents', icon: AlertTriangle },
-  { id: 'dispatch', label: 'Dispatch', icon: SendHorizontal, badge: 'Phase 8', isComingSoon: true },
-  { id: 'mesh', label: 'Mesh Network', icon: Radio, badge: 'Phase 2', isComingSoon: true },
+  { id: 'dispatch', label: 'Dispatch', icon: SendHorizontal },
+  { id: 'mesh', label: 'Mesh Network', icon: Radio },
   { id: 'resources', label: 'Resources', icon: Truck },
-  { id: 'map', label: 'Map', icon: MapPin, badge: 'Phase 7', isComingSoon: true },
-  { id: 'knowledge', label: 'Knowledge Base', icon: BookOpen, badge: 'Phase 4', isComingSoon: true },
-  { id: 'analytics', label: 'Analytics', icon: BarChart3, badge: 'Phase 10', isComingSoon: true },
+  { id: 'map', label: 'Map', icon: MapPin },
+  { id: 'knowledge', label: 'Knowledge Base', icon: BookOpen, badge: 'Future', isComingSoon: true },
+  { id: 'analytics', label: 'Analytics', icon: BarChart3, badge: 'Future', isComingSoon: true },
   { id: 'settings', label: 'Settings', icon: Settings }
 ];
 

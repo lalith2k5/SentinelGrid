@@ -73,11 +73,15 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
       case 'mesh_simulator':
         return <Radio className="w-5 h-5 text-amber-400" />;
       case 'ai_engine':
-        return <Cpu className="w-5 h-5 text-slate-400" />;
+        return <Cpu className="w-5 h-5 text-emerald-400" />;
+      case 'resource_matching':
+        return <Truck className="w-5 h-5 text-blue-400" />;
+      case 'dispatch_system':
+        return <SendHorizontal className="w-5 h-5 text-purple-400" />;
+      case 'map_system':
+        return <MapPin className="w-5 h-5 text-emerald-400" />;
       case 'knowledge_base':
         return <BookOpen className="w-5 h-5 text-slate-400" />;
-      case 'map_system':
-        return <MapPin className="w-5 h-5 text-slate-400" />;
       default:
         return <Server className="w-5 h-5 text-slate-400" />;
     }
@@ -92,7 +96,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
             Operations Center Dashboard
           </h1>
           <p className="text-xs text-slate-400 font-mono mt-0.5">
-            Initial Phase 1 Foundation • Real-time operational telemetry
+            Operational Telemetry • Phases 1–7 Active
           </p>
         </div>
 
@@ -222,7 +226,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
             {counts.pendingDispatches}
           </div>
           <div className="text-[10px] text-slate-500 font-mono mt-1">
-            CAD Engine (Phase 8)
+            CAD Engine (Phase 6)
           </div>
         </div>
       </div>
@@ -237,7 +241,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
             </h2>
           </div>
           <span className="text-[11px] font-mono text-slate-400">
-            Honest Phase 1 Reporting (No Mocked Stubs)
+            Subsystem Diagnostics (Phases 1–7)
           </span>
         </div>
 

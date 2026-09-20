@@ -13,7 +13,7 @@ export const KnowledgeBasePage: React.FC = () => {
               Emergency Knowledge & RAG Library
             </h1>
             <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">
-              Phase 4 Foundation
+              Future Roadmap
             </span>
           </div>
           <p className="text-xs text-slate-400 font-mono mt-0.5">
@@ -27,7 +27,7 @@ export const KnowledgeBasePage: React.FC = () => {
         <div className="bg-slate-900/60 border border-slate-800 p-4 rounded-lg">
           <div className="text-[11px] font-mono text-slate-400 uppercase mb-1">Index State</div>
           <div className="text-lg font-bold font-mono text-slate-200">Pending Indexing</div>
-          <div className="text-[10px] text-slate-500 font-mono mt-1">Vector DB: Phase 4</div>
+          <div className="text-[10px] text-slate-500 font-mono mt-1">Vector DB: Future Phase</div>
         </div>
 
         <div className="bg-slate-900/60 border border-slate-800 p-4 rounded-lg">
@@ -58,7 +58,7 @@ export const KnowledgeBasePage: React.FC = () => {
           <input
             type="text"
             disabled
-            placeholder="Search emergency manual corpus (Coming in Phase 4)..."
+            placeholder="Search emergency manual corpus (Future Phase)..."
             className="w-full pl-9 pr-3 py-2 bg-slate-950 border border-slate-800 rounded text-xs text-slate-400 placeholder-slate-600 cursor-not-allowed"
           />
         </div>
@@ -81,9 +81,9 @@ export const KnowledgeBasePage: React.FC = () => {
       {/* Empty State Showing Required Schema Fields */}
       <EmptyState
         icon={BookOpen}
-        title="Local Emergency Knowledge / RAG System — Coming in Phase 4"
+        title="Local Emergency Knowledge / RAG System — Future Phase"
         description="The knowledge base will store emergency field manuals, triage protocols, hazardous chemical mitigation steps, and search indexes locally on disk for retrieval without internet access."
-        badge="Phase 4 Foundation Ready"
+        badge="Planned Future Phase"
       />
     </div>
   );

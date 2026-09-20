@@ -10,8 +10,8 @@ export interface ServiceModuleInfo {
 }
 
 /**
- * AI Triage Service (Architectural Placeholder - Phase 3)
- * Provides interface for zero-cloud local LLM triage (Ollama/Apple Silicon M2)
+ * AI Triage Service (Phase 3 - Implemented & Hardened)
+ * Provides interface for zero-cloud local heuristic triage engine
  * and optional cloud fallback.
  */
 export class AITriageService {
